@@ -41,6 +41,7 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [gameOver, setGameOver] = useState(null);
   const [history, setHistory] = useState([]);
+  const [historyPage, setHistoryPage] = useState(0);
 
   const [session, setSession] = useState(() => {
     try {
@@ -167,7 +168,9 @@ export default function App() {
           setPlayers(msg.players || msg.standings || players);
           setHistory((h) => {
             const without = h.filter((r) => r.round !== msg.round);
-            return [...without, msg].sort((a, b) => a.round - b.round);
+            const next = [...without, msg].sort((a, b) => a.round - b.round);
+            setHistoryPage(Math.max(0, next.length - 1));
+            return next;
           });
           setScreen(msg.gameOver ? "game_over" : "result");
           break;
@@ -175,7 +178,10 @@ export default function App() {
         case "game_over": {
           setGameOver(msg);
           setPlayers(msg.players || players);
-          if (msg.history) setHistory(msg.history);
+          if (msg.history) {
+            setHistory(msg.history);
+            setHistoryPage(Math.max(0, (msg.history.length || 1) - 1));
+          }
           setScreen("game_over");
           break;
         }
@@ -186,11 +192,14 @@ export default function App() {
           setHostId(msg.hostId || null);
           setPlayers(msg.players || []);
           setRound(msg.round || 0);
-          setHistory(msg.history || []);
+          const hist = msg.history || [];
+          setHistory(hist);
+          setHistoryPage((p) => (hist.length ? Math.min(p, hist.length - 1) : 0));
           setSession({ code: msg.code, playerId: pid, name: session?.name || name });
           if (msg.state === "lobby") {
             setScreen("lobby");
             resetRoundUi();
+            setHistoryPage(0);
           } else if (msg.state === "drafting") {
             const d = msg.draft || {};
             const secs = d.secondsLeft ?? 30;
@@ -412,6 +421,7 @@ export default function App() {
     resetRoundUi();
     setGameOver(null);
     setHistory([]);
+    setHistoryPage(0);
   };
 
   const me = useMemo(() => players.find((p) => p.id === playerId), [players, playerId]);
@@ -777,29 +787,74 @@ export default function App() {
             )}
           </div>
 
-          {history.length > 0 && (
-            <div className="card p-5">
-              <h3 className="font-bold mb-3 text-slate-900 dark:text-slate-100">History</h3>
-              <div className="space-y-3 max-h-[360px] overflow-auto pr-1">
-                {[...history].reverse().map((h) => (
-                  <div key={h.round} className="rounded-lg border border-slate-200 p-3 bg-white dark:border-slate-700 dark:bg-slate-800">
-                    <div className="font-semibold text-sm mb-1 text-slate-900 dark:text-slate-100">Round {h.round}</div>
-                    <div className="text-xs text-slate-600 dark:text-slate-400 mb-2">
-                      {h.constraints?.country} · {h.constraints?.position} · {h.constraints?.club}
-                    </div>
-                    <div className="space-y-1">
-                      {(h.results || []).map((r) => (
-                        <div key={r.playerId} className="text-xs flex justify-between gap-2 text-slate-700 dark:text-slate-300">
-                          <span className="truncate">{r.name}: {r.guess || "—"}</span>
-                          <span className="font-semibold text-slate-900 dark:text-slate-100">+{r.points}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
+          <div className="card p-5">
+            <div className="flex items-center justify-between mb-3 gap-2">
+              <h3 className="font-bold text-slate-900 dark:text-slate-100">Session History</h3>
+              {history.length > 0 && (
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  {Math.min(historyPage + 1, history.length)}/{history.length}
+                </span>
+              )}
             </div>
-          )}
+            {history.length === 0 ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400">No completed rounds yet.</p>
+            ) : (() => {
+              const safePage = Math.min(Math.max(historyPage, 0), history.length - 1);
+              const h = history[safePage];
+              return (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setHistoryPage((p) => Math.max(0, Math.min(p, history.length - 1) - 1))}
+                      disabled={safePage === 0}
+                      className="px-2.5 py-1 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200"
+                    >
+                      ← Prev
+                    </button>
+                    <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Round {h.round}</span>
+                    <button
+                      type="button"
+                      onClick={() => setHistoryPage((p) => Math.min(history.length - 1, Math.min(p, history.length - 1) + 1))}
+                      disabled={safePage === history.length - 1}
+                      className="px-2.5 py-1 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200"
+                    >
+                      Next →
+                    </button>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-700 dark:bg-slate-800/60">
+                    <div className="flex items-center justify-between mb-1.5 gap-2">
+                      <span className="font-semibold text-slate-900 dark:text-slate-100">Round {h.round}</span>
+                      <span className="text-xs text-slate-500 dark:text-slate-400 text-right">
+                        {h.constraints?.country} · {h.constraints?.position} · {h.constraints?.club}
+                      </span>
+                    </div>
+                    <ul className="space-y-1.5">
+                      {(h.results || []).map((r) => (
+                        <li key={r.playerId} className="text-xs">
+                          <div className="flex justify-between gap-2">
+                            <span className="font-medium text-slate-800 dark:text-slate-200 truncate">{r.name}</span>
+                            <span className="font-semibold text-slate-900 dark:text-slate-100">+{r.points}</span>
+                          </div>
+                          <div className="text-slate-600 dark:text-slate-400 truncate">
+                            Guess: <span className="font-medium">{r.guess || "—"}</span>
+                          </div>
+                          <div className="text-slate-600 dark:text-slate-400 truncate">
+                            Matched: <span className="font-medium">{r.matched_player?.name || "No match found"}</span>
+                          </div>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            <BreakdownPill label="Country" ok={r.breakdown?.country} />
+                            <BreakdownPill label="Position" ok={r.breakdown?.position} />
+                            <BreakdownPill label="Club" ok={r.breakdown?.club} />
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
         </div>
       </div>
     </Shell>
