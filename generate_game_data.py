@@ -22,8 +22,42 @@ TRANSFER_COLUMNS = {
 }
 
 
+INVALID_CLUBS = {
+    "",
+    "Without Club",
+    "Retired",
+    "Unknown",
+    "Career break",
+    "---",
+    "Without club",
+    "Career Break",
+    "Unknown Club",
+    "No Club",
+    "None",
+    "N/A",
+    "n/a",
+    "-",
+    "--",
+    "unknown",
+}
+
+
 def clean(v):
     return (v or "").strip()
+
+
+def is_valid_club(name):
+    n = clean(name)
+    if not n:
+        return False
+    if n in INVALID_CLUBS:
+        return False
+    if n.lower() in {x.lower() for x in INVALID_CLUBS}:
+        return False
+    # filter obvious non-club placeholders
+    if n.startswith("---"):
+        return False
+    return True
 
 
 TOP_FIFA_COUNTRIES = [
@@ -111,7 +145,7 @@ def main():
             if not pid or not name or not position or position == "Missing" or not country:
                 continue
             clubs = set()
-            if current_club:
+            if is_valid_club(current_club):
                 clubs.add(current_club)
             players[pid] = {
                 "player_id": pid,
@@ -121,7 +155,6 @@ def main():
                 "clubs": clubs,
             }
 
-    invalid_clubs = {"", "Without Club", "Retired", "Unknown", "Career break", "---"}
     with open(TRANSFERS_CSV, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
@@ -130,7 +163,7 @@ def main():
                 continue
             for key in ("from_club", "to_club"):
                 c = clean(row.get(TRANSFER_COLUMNS[key]))
-                if c and c not in invalid_clubs:
+                if is_valid_club(c):
                     players[pid]["clubs"].add(c)
 
     records = []
@@ -138,7 +171,7 @@ def main():
     positions = set()
     clubs_pool = set()
     for p in players.values():
-        club_list = sorted(p["clubs"])
+        club_list = sorted({c for c in p["clubs"] if is_valid_club(c)})
         if not club_list:
             continue
         rec = {
@@ -153,10 +186,15 @@ def main():
         positions.add(rec["position"])
         clubs_pool.update(club_list)
 
+    # index by normalized name; prefer richer records first so ambiguous guesses resolve better
+    by_id = {p["player_id"]: p for p in records}
     name_index = defaultdict(list)
     for p in records:
         norm = " ".join(p["name"].lower().split())
         name_index[norm].append(p["player_id"])
+    for norm, ids in name_index.items():
+        ids.sort(key=lambda pid: (-len(by_id[pid]["clubs"]), by_id[pid]["name"], pid))
+        name_index[norm] = ids
 
     top_fifa_countries = [c for c in TOP_FIFA_COUNTRIES if c in countries]
     top5_league_clubs = [c for c in TOP5_LEAGUE_CLUBS if c in clubs_pool]

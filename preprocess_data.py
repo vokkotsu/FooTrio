@@ -96,8 +96,45 @@ TOP5_LEAGUE_CLUBS = [
 ]
 
 
+INVALID_CLUBS = {
+    "",
+    "Without Club",
+    "Retired",
+    "Unknown",
+    "Career break",
+    "---",
+    "Without club",
+    "Career Break",
+    "Unknown Club",
+    "No Club",
+    "None",
+    "N/A",
+    "n/a",
+    "-",
+    "--",
+    "unknown",
+}
+
+
 def clean_text(series: pd.Series) -> pd.Series:
     return series.fillna("").astype(str).str.strip()
+
+
+def clean_value(v) -> str:
+    return str(v or "").strip()
+
+
+def is_valid_club(name) -> bool:
+    n = clean_value(name)
+    if not n:
+        return False
+    if n in INVALID_CLUBS:
+        return False
+    if n.lower() in {x.lower() for x in INVALID_CLUBS}:
+        return False
+    if n.startswith("---"):
+        return False
+    return True
 
 
 def main() -> None:
@@ -133,16 +170,15 @@ def main() -> None:
     clubs_by_player: dict[str, set[str]] = {}
     for pid, club in zip(players_df["player_id"], players_df["current_club"]):
         clubs_by_player.setdefault(pid, set())
-        if club:
-            clubs_by_player[pid].add(club)
+        if is_valid_club(club):
+            clubs_by_player[pid].add(clean_value(club))
 
-    invalid_clubs = {"", "Without Club", "Retired", "Unknown", "Career break", "---"}
     merged = transfers_df.merge(players_df[["player_id"]], on="player_id", how="inner")
     for _, row in merged.iterrows():
         pid = row["player_id"]
         for club in (row["from_club"], row["to_club"]):
-            if club and club not in invalid_clubs:
-                clubs_by_player.setdefault(pid, set()).add(club)
+            if is_valid_club(club):
+                clubs_by_player.setdefault(pid, set()).add(clean_value(club))
 
     players = []
     countries = set()
@@ -150,7 +186,7 @@ def main() -> None:
     clubs = set()
     for _, row in players_df.iterrows():
         pid = row["player_id"]
-        player_clubs = sorted(clubs_by_player.get(pid, set()))
+        player_clubs = sorted({c for c in clubs_by_player.get(pid, set()) if is_valid_club(c)})
         if not player_clubs:
             continue
         record = {
@@ -165,6 +201,15 @@ def main() -> None:
         positions.add(record["position"])
         clubs.update(player_clubs)
 
+    # name index prefers richer club histories for ambiguous same-name matches
+    name_index = {}
+    by_id = {p["player_id"]: p for p in players}
+    for p in players:
+        norm = " ".join(str(p["name"]).lower().split())
+        name_index.setdefault(norm, []).append(p["player_id"])
+    for norm, ids in name_index.items():
+        ids.sort(key=lambda pid: (-len(by_id[pid]["clubs"]), by_id[pid]["name"], pid))
+
     top_fifa_countries = [c for c in TOP_FIFA_COUNTRIES if c in countries]
     top5_league_clubs = [c for c in TOP5_LEAGUE_CLUBS if c in clubs]
 
@@ -178,6 +223,7 @@ def main() -> None:
             ),
         },
         "players": players,
+        "name_index": name_index,
         "options": {
             "countries": sorted(countries),
             "positions": sorted(positions),

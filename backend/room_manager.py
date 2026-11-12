@@ -239,19 +239,24 @@ class Room:
                 "breakdown": {"country": False, "position": False, "club": False},
                 "points": 0,
             }
-        # choose best match by points, then by more club matches (not needed) - deterministic by name
+        # choose best match by constraint points, then by richer/cleaner record to avoid
+        # ambiguous-name collisions (e.g. different players sharing the same name)
         best = None
         for player in matches:
+            clubs = [c for c in (player.get("clubs") or []) if isinstance(c, str) and c.strip()]
             breakdown = {
                 "country": player.get("country") == constraints.get("country"),
                 "position": player.get("position") == constraints.get("position"),
-                "club": constraints.get("club") in (player.get("clubs") or []),
+                "club": constraints.get("club") in clubs,
             }
             points = sum(1 for v in breakdown.values() if v)
-            cand = (points, player.get("name", ""), player, breakdown)
-            if best is None or cand[0] > best[0] or (cand[0] == best[0] and cand[1] < best[1]):
+            club_history_len = len(set(clubs))
+            name = (player.get("name") or "").strip()
+            # prefer: more points, then more complete club history, then stable id/name
+            cand = (points, club_history_len, str(player.get("player_id", "")), name, player, breakdown)
+            if best is None or cand[:4] > best[:4]:
                 best = cand
-        _, _, player, breakdown = best
+        _, _, _, _, player, breakdown = best
         return {
             "guess": guess_text,
             "matched_player": {
