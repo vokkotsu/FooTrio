@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 * { box-sizing: border-box; }
 
 body {
@@ -7,6 +9,11 @@ body {
   font-family: "Outfit", system-ui, -apple-system, sans-serif;
   background: linear-gradient(180deg, #f4f7f3 0%, #eaf1ea 100%);
   color: #132018;
+}
+
+.dark body {
+  background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
+  color: #e5e7eb;
 }
 
 #root { min-height: 100vh; }
@@ -17,6 +24,11 @@ body {
   border-radius: 16px;
   box-shadow: 0 10px 30px rgba(20, 50, 30, 0.08);
 }
+.dark .card {
+  background: rgba(30, 41, 59, 0.92);
+  border-color: #334155;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
 
 .input {
   width: 100%;
@@ -25,11 +37,21 @@ body {
   padding: 10px 12px;
   font-size: 15px;
   background: #fbfdfb;
+  color: #132018;
 }
 .input:focus {
   outline: none;
   border-color: #2f7a4f;
   box-shadow: 0 0 0 3px rgba(47, 122, 79, 0.15);
+}
+.dark .input {
+  background: #0f172a;
+  border-color: #475569;
+  color: #e5e7eb;
+}
+.dark .input:focus {
+  border-color: #34d399;
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.2);
 }
 
 .btn {
@@ -39,8 +61,11 @@ body {
   transition: transform 120ms ease, filter 120ms ease;
 }
 .btn:active { transform: scale(0.98); }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-primary { background: #1f7a4d; color: white; }
 .btn-primary:hover { filter: brightness(1.05); }
 .btn-secondary { background: #183b5a; color: white; }
+.dark .btn-secondary { background: #2563eb; }
 .btn-ghost { background: #eef4ef; color: #183528; border: 1px solid #d7e3d8; }
+.dark .btn-ghost { background: #334155; color: #e5e7eb; border-color: #475569; }
 .pill { border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; }

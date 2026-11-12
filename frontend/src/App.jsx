@@ -14,6 +14,13 @@ export default function App() {
 
   const [screen, setScreen] = useState("landing"); // landing | lobby | drafting | waiting | guessing | result | game_over
   const [name, setName] = useState("");
+  const [theme, setTheme] = useState(() => {
+    try {
+      const t = localStorage.getItem("theme");
+      if (t === "light" || t === "dark") return t;
+    } catch {}
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  });
   const [joinCode, setJoinCode] = useState("");
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
@@ -49,6 +56,15 @@ export default function App() {
       else localStorage.removeItem(SESSION_KEY);
     } catch {}
   }, [session]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("theme", theme);
+    } catch {}
+    document.documentElement.classList.toggle("dark", theme === "dark");
+  }, [theme]);
+
+  const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
 
   const resetRoundUi = useCallback(() => {
     setDraft(null);
@@ -404,10 +420,17 @@ export default function App() {
     return (
       <Shell>
         <div className="card w-full max-w-lg p-8">
-          <h1 className="text-3xl font-extrabold tracking-tight text-[#143524]">Football Trivia Draft</h1>
-          <p className="mt-2 text-sm text-slate-600">
-            Real-time multiplayer (3 players). Draft Country/Position/Club, then guess a matching footballer.
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="text-3xl font-extrabold tracking-tight text-[#143524] dark:text-emerald-300">Football Trivia Draft</h1>
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                Real-time multiplayer (3 players). Draft Country/Position/Club, then guess a matching footballer.
+              </p>
+            </div>
+            <button className="btn btn-ghost text-sm whitespace-nowrap" onClick={toggleTheme} aria-label="Toggle dark mode">
+              {theme === "dark" ? "☀️ Light" : "🌙 Dark"}
+            </button>
+          </div>
           <div className="mt-6 space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1">Your name</label>
@@ -449,15 +472,18 @@ export default function App() {
           <div className="card p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="text-xl font-bold text-[#143524]">
+                <h2 className="text-xl font-bold text-[#143524] dark:text-emerald-300">
                   {screen === "lobby" ? "Lobby" : `Round ${round || 1}`}
                 </h2>
-                <p className="text-sm text-slate-600">
+                <p className="text-sm text-slate-600 dark:text-slate-300">
                   Room <span className="font-mono font-bold tracking-widest">{roomCode}</span> · You:{" "}
                   <span className="font-semibold">{me?.name || name}</span>
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                <button className="btn btn-ghost text-sm" onClick={toggleTheme} aria-label="Toggle dark mode">
+                  {theme === "dark" ? "☀️ Light" : "🌙 Dark"}
+                </button>
                 <button className="btn btn-ghost text-sm" onClick={() => navigator.clipboard?.writeText(roomCode || "")}>
                   Copy Code
                 </button>
