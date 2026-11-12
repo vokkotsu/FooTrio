@@ -434,7 +434,7 @@ export default function App() {
           </div>
           <div className="mt-6 space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Your name</label>
+              <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">Your name</label>
               <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter your name" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -442,7 +442,7 @@ export default function App() {
               <button className="btn btn-ghost w-full" onClick={() => createRoom(true)}>Single Player (vs 2 Bots)</button>
             </div>
             <div className="space-y-2 pt-1">
-              <label className="block text-sm font-medium mb-1">Join existing room</label>
+              <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">Join existing room</label>
               <div className="flex gap-2">
                 <input
                   className="input uppercase tracking-widest"
@@ -453,10 +453,10 @@ export default function App() {
                 <button className="btn btn-secondary whitespace-nowrap" onClick={joinRoom}>Join</button>
               </div>
             </div>
-            {status && <p className="text-sm text-slate-600">{status}</p>}
-            {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+            {status && <p className="text-sm text-slate-600 dark:text-slate-300">{status}</p>}
+            {error && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{error}</p>}
             {!WS_URL && (
-              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 dark:text-amber-200 dark:bg-amber-900/30 dark:border-amber-700">
                 Set <code>VITE_WS_URL</code> for deployed builds (e.g. ws://localhost:8000/ws locally).
               </p>
             )}
@@ -491,20 +491,20 @@ export default function App() {
                 <button className="btn btn-ghost text-sm" onClick={leaveToHome}>Leave</button>
               </div>
             </div>
-            {error && <p className="mt-3 text-sm text-red-600" role="alert">{error}</p>}
-            {status && <p className="mt-2 text-sm text-slate-600">{status}</p>}
+            {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400" role="alert">{error}</p>}
+            {status && <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{status}</p>}
           </div>
 
           {screen === "lobby" && (
             <div className="card p-6">
-              <h3 className="font-semibold text-lg mb-2">Waiting for players</h3>
-              <p className="text-sm text-slate-600 mb-4">
+              <h3 className="font-semibold text-lg mb-2 text-slate-900 dark:text-slate-100">Waiting for players</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
                 {players.some((p) => p.isBot)
                   ? "Single player test mode: you vs 2 bots. Round 1 starts automatically."
                   : "Exactly 3 players are required. Round 1 starts automatically once everyone joins."}
               </p>
               <PlayerChips players={players} />
-              <div className="mt-4 text-sm text-slate-700">
+              <div className="mt-4 text-sm text-slate-700 dark:text-slate-300">
                 {players.length}/3 joined
               </div>
             </div>
@@ -513,9 +513,9 @@ export default function App() {
           {(screen === "drafting" || screen === "waiting") && (
             <div className="card p-6">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                <h3 className="font-semibold text-lg">Drafting Phase</h3>
+                <h3 className="font-semibold text-lg text-slate-900 dark:text-slate-100">Drafting Phase</h3>
                 <div className="flex items-center gap-2">
-                  <span className={`pill ${draftSecondsLeft <= 10 ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-700"}`}>
+                  <span className={`pill ${draftSecondsLeft <= 10 ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" : "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200"}`}>
                     {draftSecondsLeft}s left
                   </span>
                   <span className="pill bg-emerald-100 text-emerald-800">
@@ -525,8 +525,8 @@ export default function App() {
               </div>
               {draft ? (
                 <>
-                  <p className="text-sm text-slate-700 mb-4">
-                    You are selecting: <span className="font-bold text-[#143524]">{draft.attributeLabel || draft.attribute || "..."}</span>
+                  <p className="text-sm text-slate-700 dark:text-slate-300 mb-4">
+                    You are selecting: <span className="font-bold text-[#143524] dark:text-emerald-300">{draft.attributeLabel || draft.attribute || "..."}</span>
                   </p>
                   {(draft.options || []).length > 0 ? (
                     <>
@@ -541,7 +541,7 @@ export default function App() {
                               className={`text-left rounded-xl border px-4 py-3 font-medium transition ${
                                 selected
                                   ? "bg-emerald-600 text-white border-emerald-600"
-                                  : "bg-white hover:bg-emerald-50 border-emerald-200 text-slate-800"
+                                  : "bg-white hover:bg-emerald-50 border-emerald-200 text-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
                               } ${draft.selected && !selected ? "opacity-60" : ""}`}
                             >
                               {opt}
@@ -558,7 +558,7 @@ export default function App() {
                           >
                             Refresh picks ({draft.refreshesLeft ?? 0} left)
                           </button>
-                          <span className="text-xs text-slate-500">
+                          <span className="text-xs text-slate-500 dark:text-slate-400">
                             {draft.attribute === "position"
                               ? "Get a new set of 5 sub-position options."
                               : "Get a new set of 5 options (keeps 3/5 bias)."}
@@ -568,8 +568,8 @@ export default function App() {
                     </>
                   ) : (
                     <div className="space-y-3">
-                      <p className="text-slate-600">No draft options available yet.</p>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-slate-600 dark:text-slate-300">No draft options available yet.</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
                         Restart <code>python run.py</code> so the backend picks up the latest fixes, then hard-refresh and click Retry.
                       </p>
                       <button
@@ -587,7 +587,7 @@ export default function App() {
                     </div>
                   )}
                   {draft.selected && (
-                    <div className="mt-5 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
+                    <div className="mt-5 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 dark:bg-amber-900/30 dark:border-amber-700 dark:text-amber-100">
                       <p className="font-semibold">Waiting for others...</p>
                       <p className="text-sm mt-1">
                         You selected <span className="font-bold">{draft.selected}</span>. The 3 attributes will be revealed once everyone has chosen or when the draft timer ends ({draftSecondsLeft}s left).
@@ -597,8 +597,8 @@ export default function App() {
                 </>
               ) : (
                 <div className="space-y-3">
-                  <p className="text-slate-600">Preparing your draft options...</p>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-slate-600 dark:text-slate-300">Preparing your draft options...</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
                     If this stays stuck, restart <code>python run.py</code> (backend may be on old code) and click Retry.
                   </p>
                   <button
@@ -621,13 +621,13 @@ export default function App() {
           {screen === "guessing" && (
             <div className="card p-6">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                <h3 className="font-semibold text-lg">Guessing Phase</h3>
-                <div className={`pill ${guessInfo.secondsLeft <= 10 ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-700"}`}>
+                <h3 className="font-semibold text-lg text-slate-900 dark:text-slate-100">Guessing Phase</h3>
+                <div className={`pill ${guessInfo.secondsLeft <= 10 ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" : "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200"}`}>
                   {guessInfo.secondsLeft}s left
                 </div>
               </div>
               <div className="mb-4">
-                <p className="text-sm text-slate-600 mb-2">Constraints (all 3 revealed):</p>
+                <p className="text-sm text-slate-600 dark:text-slate-300 mb-2">Constraints (all 3 revealed):</p>
                 <div className="flex flex-wrap gap-2">
                   <ConstraintChip label="Country" value={constraints?.country} />
                   <ConstraintChip label="Position" value={constraints?.position} />
@@ -636,7 +636,7 @@ export default function App() {
               </div>
               {!guessInfo.submitted ? (
                 <div className="space-y-3">
-                  <label className="block text-sm font-medium">Name a real-life football player matching all 3 (as best as you can)</label>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Name a real-life football player matching all 3 (as best as you can)</label>
                   <div className="relative">
                     <input
                       className="input"
@@ -669,16 +669,16 @@ export default function App() {
                       </div>
                     )}
                   </div>
-                  <p className="text-xs text-slate-500">Type to see suggestions (click a suggestion to submit it). This helps avoid typos or unknown players.</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Type to see suggestions (click a suggestion to fill it in). This helps avoid typos or unknown players.</p>
                   <button className="btn btn-primary" onClick={() => submitGuess()}>Submit Guess</button>
                 </div>
               ) : (
-                <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900">
+                <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 dark:bg-emerald-900/30 dark:border-emerald-700 dark:text-emerald-100">
                   <p className="font-semibold">Guess submitted. Waiting for others...</p>
                   <p className="text-sm mt-1">Results will appear when the timer ends or all players submit.</p>
                 </div>
               )}
-              <p className="mt-4 text-sm text-slate-600">
+              <p className="mt-4 text-sm text-slate-600 dark:text-slate-300">
                 Guesses submitted: {guessInfo.submittedCount}/{guessInfo.requiredCount}
               </p>
             </div>
@@ -687,14 +687,14 @@ export default function App() {
           {(screen === "result" || screen === "game_over") && result && (
             <div className="card p-6">
               <div className="flex items-center justify-between gap-3 mb-3">
-                <h3 className="font-semibold text-lg">
+                <h3 className="font-semibold text-lg text-slate-900 dark:text-slate-100">
                   {screen === "game_over" ? "Game Over" : `Round ${result.round} Results`}
                 </h3>
-                {screen !== "game_over" && <span className="pill bg-blue-100 text-blue-800">Next round starting...</span>}
+                {screen !== "game_over" && <span className="pill bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">Next round starting...</span>}
               </div>
 
               <div className="mb-4">
-                <p className="text-sm text-slate-600 mb-2">Constraints</p>
+                <p className="text-sm text-slate-600 dark:text-slate-300 mb-2">Constraints</p>
                 <div className="flex flex-wrap gap-2">
                   <ConstraintChip label="Country" value={result.constraints?.country} />
                   <ConstraintChip label="Position" value={result.constraints?.position} />
@@ -704,15 +704,15 @@ export default function App() {
 
               <div className="space-y-3">
                 {(result.results || []).map((r) => (
-                  <div key={r.playerId} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div key={r.playerId} className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="font-semibold">{r.name}</div>
-                      <div className="pill bg-emerald-100 text-emerald-800">+{r.points} / 3 (Total {r.totalScore})</div>
+                      <div className="font-semibold text-slate-900 dark:text-slate-100">{r.name}</div>
+                      <div className="pill bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">+{r.points} / 3 (Total {r.totalScore})</div>
                     </div>
-                    <div className="mt-1 text-sm text-slate-700">
+                    <div className="mt-1 text-sm text-slate-700 dark:text-slate-300">
                       Guess: <span className="font-medium">{r.guess || "(no guess)"}</span>
                     </div>
-                    <div className="mt-1 text-sm text-slate-700">
+                    <div className="mt-1 text-sm text-slate-700 dark:text-slate-300">
                       Matched:{" "}
                       <span className="font-medium">
                         {r.matched_player?.name || "No match found"}
@@ -728,7 +728,7 @@ export default function App() {
               </div>
 
               {screen === "game_over" && (
-                <div className="mt-5 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
+                <div className="mt-5 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 dark:bg-amber-900/30 dark:border-amber-700 dark:text-amber-100">
                   <p className="font-bold text-lg">
                     Winner: {players.find((p) => p.id === (gameOver?.winnerId || result.winnerId))?.name || "Unknown"}
                   </p>
@@ -742,36 +742,36 @@ export default function App() {
 
         <div className="space-y-5">
           <div className="card p-5">
-            <h3 className="font-bold mb-3">Scoreboard</h3>
+            <h3 className="font-bold mb-3 text-slate-900 dark:text-slate-100">Scoreboard</h3>
             <div className="space-y-2">
               {[...players]
                 .sort((a, b) => (b.score || 0) - (a.score || 0))
                 .map((p) => (
-                  <div key={p.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2">
+                  <div key={p.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
                     <div className="min-w-0">
-                      <div className="font-medium truncate">
-                        {p.name} {p.id === playerId ? <span className="text-slate-400">(you)</span> : null}
-                        {p.isHost ? <span className="ml-1 text-amber-700 text-xs">(host)</span> : null}
-                        {p.isBot ? <span className="ml-1 text-slate-500 text-xs">(bot)</span> : null}
+                      <div className="font-medium truncate text-slate-900 dark:text-slate-100">
+                        {p.name} {p.id === playerId ? <span className="text-slate-400 dark:text-slate-400">(you)</span> : null}
+                        {p.isHost ? <span className="ml-1 text-amber-700 dark:text-amber-400 text-xs">(host)</span> : null}
+                        {p.isBot ? <span className="ml-1 text-slate-500 dark:text-slate-400 text-xs">(bot)</span> : null}
                       </div>
                     </div>
-                    <div className="font-bold text-[#143524]">{p.score ?? 0}</div>
+                    <div className="font-bold text-[#143524] dark:text-emerald-300">{p.score ?? 0}</div>
                   </div>
                 ))}
-              {players.length === 0 && <p className="text-sm text-slate-500">No players yet.</p>}
+              {players.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400">No players yet.</p>}
             </div>
-            <p className="text-xs text-slate-500 mt-3">Win condition: reach 15 points.</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-3">Win condition: reach 15 points.</p>
           </div>
 
           <div className="card p-5">
-            <h3 className="font-bold mb-3">Round Info</h3>
-            <ul className="text-sm text-slate-700 space-y-1">
-              <li>State: <span className="font-medium">{screen}</span></li>
-              <li>Round: <span className="font-medium">{round || "-"}</span></li>
-              <li>Players: <span className="font-medium">{players.length}/3</span></li>
+            <h3 className="font-bold mb-3 text-slate-900 dark:text-slate-100">Round Info</h3>
+            <ul className="text-sm text-slate-700 dark:text-slate-300 space-y-1">
+              <li>State: <span className="font-medium text-slate-900 dark:text-slate-100">{screen}</span></li>
+              <li>Round: <span className="font-medium text-slate-900 dark:text-slate-100">{round || "-"}</span></li>
+              <li>Players: <span className="font-medium text-slate-900 dark:text-slate-100">{players.length}/3</span></li>
             </ul>
             {screen === "waiting" && draft?.selected && (
-              <div className="mt-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <div className="mt-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 dark:text-amber-100 dark:bg-amber-900/30 dark:border-amber-700">
                 Waiting for others... ({draftStatus.submittedCount}/{draftStatus.requiredCount} submitted, {draftSecondsLeft}s left)
               </div>
             )}
@@ -779,19 +779,19 @@ export default function App() {
 
           {history.length > 0 && (
             <div className="card p-5">
-              <h3 className="font-bold mb-3">History</h3>
+              <h3 className="font-bold mb-3 text-slate-900 dark:text-slate-100">History</h3>
               <div className="space-y-3 max-h-[360px] overflow-auto pr-1">
                 {[...history].reverse().map((h) => (
-                  <div key={h.round} className="rounded-lg border border-slate-200 p-3 bg-white">
-                    <div className="font-semibold text-sm mb-1">Round {h.round}</div>
-                    <div className="text-xs text-slate-600 mb-2">
+                  <div key={h.round} className="rounded-lg border border-slate-200 p-3 bg-white dark:border-slate-700 dark:bg-slate-800">
+                    <div className="font-semibold text-sm mb-1 text-slate-900 dark:text-slate-100">Round {h.round}</div>
+                    <div className="text-xs text-slate-600 dark:text-slate-400 mb-2">
                       {h.constraints?.country} · {h.constraints?.position} · {h.constraints?.club}
                     </div>
                     <div className="space-y-1">
                       {(h.results || []).map((r) => (
-                        <div key={r.playerId} className="text-xs flex justify-between gap-2">
+                        <div key={r.playerId} className="text-xs flex justify-between gap-2 text-slate-700 dark:text-slate-300">
                           <span className="truncate">{r.name}: {r.guess || "—"}</span>
-                          <span className="font-semibold">+{r.points}</span>
+                          <span className="font-semibold text-slate-900 dark:text-slate-100">+{r.points}</span>
                         </div>
                       ))}
                     </div>
@@ -818,14 +818,14 @@ function PlayerChips({ players }) {
   return (
     <div className="flex flex-wrap gap-2">
       {players.map((p) => (
-        <span key={p.id} className="pill bg-emerald-100 text-emerald-800 border border-emerald-200">
+        <span key={p.id} className="pill bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200 dark:border-emerald-700">
           {p.name}
           {p.isHost ? " (host)" : ""}
           {p.isBot ? " (bot)" : ""}
         </span>
       ))}
       {Array.from({ length: Math.max(0, 3 - players.length) }).map((_, i) => (
-        <span key={`empty-${i}`} className="pill bg-slate-100 text-slate-500 border border-slate-200">
+        <span key={`empty-${i}`} className="pill bg-slate-100 text-slate-500 border border-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600">
           Waiting...
         </span>
       ))}
@@ -835,16 +835,16 @@ function PlayerChips({ players }) {
 
 function ConstraintChip({ label, value }) {
   return (
-    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
-      <div className="text-[11px] uppercase tracking-wide text-emerald-700 font-semibold">{label}</div>
-      <div className="font-semibold text-[#143524]">{value || "?"}</div>
+    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-800 dark:bg-emerald-900/30">
+      <div className="text-[11px] uppercase tracking-wide text-emerald-700 dark:text-emerald-300 font-semibold">{label}</div>
+      <div className="font-semibold text-[#143524] dark:text-slate-100">{value || "?"}</div>
     </div>
   );
 }
 
 function BreakdownPill({ label, ok }) {
   return (
-    <span className={`pill ${ok ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-700"}`}>
+    <span className={`pill ${ok ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200" : "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200"}`}>
       {label} {ok ? "+1" : "+0"}
     </span>
   );

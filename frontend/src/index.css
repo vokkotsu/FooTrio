@@ -39,6 +39,7 @@ body {
   background: #fbfdfb;
   color: #132018;
 }
+.input::placeholder { color: #94a3b8; }
 .input:focus {
   outline: none;
   border-color: #2f7a4f;
@@ -49,6 +50,7 @@ body {
   border-color: #475569;
   color: #e5e7eb;
 }
+.dark .input::placeholder { color: #64748b; }
 .dark .input:focus {
   border-color: #34d399;
   box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.2);
