@@ -3,16 +3,18 @@ import random
 import string
 import time
 
-from data_loader import sample_options, find_player_matches
+from data_loader import sample_options, find_player_matches, best_guess_for_constraints
 import config
 
 
 class Room:
-    def __init__(self, code, host_id):
+    def __init__(self, code, host_id, single_player=False):
         self.code = code
         self.host_id = host_id
-        self.players = {}  # pid -> name
-        self.player_ws = {}  # pid -> websocket
+        self.single_player = single_player
+        self.players = {}  # pid -> name (humans and bots)
+        self.player_ws = {}  # pid -> websocket (humans only)
+        self.bot_ids = set()  # pids that are bots
         self.scores = {}  # pid -> int
         self.state = "lobby"  # lobby | drafting | guessing | result | game_over
         self.round_number = 0
@@ -39,9 +41,22 @@ class Room:
         self.scores.setdefault(pid, 0)
         return True
 
+    def add_bot(self, name):
+        if len(self.players) >= config.ROOM_SIZE:
+            return None
+        pid = f"bot-{len(self.bot_ids) + 1}"
+        self.players[pid] = name
+        self.bot_ids.add(pid)
+        self.scores.setdefault(pid, 0)
+        return pid
+
+    def is_bot(self, pid):
+        return pid in self.bot_ids
+
     def remove_player(self, pid):
         self.players.pop(pid, None)
         self.player_ws.pop(pid, None)
+        self.bot_ids.discard(pid)
         self.scores.pop(pid, None)
         self.selections.pop(pid, None)
         self.guesses.pop(pid, None)
@@ -53,7 +68,7 @@ class Room:
         self.player_ws.pop(pid, None)
 
     def attach_player(self, pid, ws):
-        if pid in self.players:
+        if pid in self.players and not self.is_bot(pid):
             self.player_ws[pid] = ws
             return True
         return False
@@ -66,6 +81,7 @@ class Room:
                 "name": self.players[pid],
                 "score": self.scores.get(pid, 0),
                 "isHost": pid == self.host_id,
+                "isBot": self.is_bot(pid),
             }
             for pid in ordered
         ]
@@ -91,7 +107,7 @@ class Room:
 
     # --- helpers ---
     def all_players_connected(self):
-        # for simplicity require 3 players present
+        # humans+bots must fill the room
         return len(self.players) == config.ROOM_SIZE
 
     def attribute_for(self, pid):
@@ -121,7 +137,28 @@ class Room:
             attr = attrs[(i + self.assignment_offset) % len(attrs)]
             self.assignments[pid] = attr
             self.draft_options[pid] = sample_options(attr, config.DRAFT_OPTIONS)
+
+        # auto-select for bots
+        self._auto_select_bots()
         return True
+
+    def _auto_select_bots(self):
+        for pid in list(self.bot_ids):
+            if pid in self.selections:
+                continue
+            options = self.draft_options.get(pid) or []
+            if options:
+                self.selections[pid] = random.choice(options)
+
+    def _auto_guess_bots(self):
+        if self.state != "guessing":
+            return
+        constraints = self.current_constraints()
+        for pid in list(self.bot_ids):
+            if pid in self.guesses:
+                continue
+            guess_text = best_guess_for_constraints(constraints)
+            self.guesses[pid] = {"text": guess_text, "submitted_at": time.monotonic()}
 
     def submit_selection(self, pid, value):
         if self.state != "drafting":
@@ -306,11 +343,11 @@ class RoomManager:
     def _gen_code(self):
         return "".join(random.choices(string.ascii_uppercase + string.digits, k=5))
 
-    def create_room(self, host_id):
+    def create_room(self, host_id, single_player=False):
         code = self._gen_code()
         while code in self.rooms:
             code = self._gen_code()
-        self.rooms[code] = Room(code, host_id)
+        self.rooms[code] = Room(code, host_id, single_player=single_player)
         return code
 
     def get_room(self, code):

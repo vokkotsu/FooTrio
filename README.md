@@ -2,6 +2,8 @@
 
 A real-time multiplayer football trivia game for **exactly 3 players**. Each round, players draft constraints (Country, Position, Club), reveal them, then race to guess a real-life footballer who matches all three. Built with **FastAPI + WebSockets** (backend) and **React + Vite + Tailwind** (frontend).
 
+Supports **multiplayer rooms** and a **single-player test mode** (you vs 2 bots) so you can try the full flow locally.
+
 ## Game Flow
 
 1. **Lobby** – Players create/join a room via WebSocket. The game requires exactly 3 players and **Round 1 starts automatically** when the 3rd joins.
@@ -88,7 +90,9 @@ npm install
 npm run dev
 ```
 
-Open the URL shown by Vite (typically `http://localhost:5173`). Create a room and have two others join with the room code (or open multiple browser windows/tabs) to start.
+Open the URL shown by Vite (typically `http://localhost:5173`).
+- **Single player (test):** click **“Single Player (vs 2 Bots)”** to start immediately with 2 server-side bots that auto-draft and auto-guess.
+- **Multiplayer:** click **“Create Multiplayer Room”** and have two others join with the room code (or open multiple browser windows/tabs). Once 3 players are in, Round 1 starts automatically.
 
 ## Configuration
 

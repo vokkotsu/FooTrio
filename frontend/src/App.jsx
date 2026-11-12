@@ -68,7 +68,8 @@ export default function App() {
           setScreen("lobby");
           setStatus("");
           setError("");
-          setSession({ code: msg.code, playerId: msg.playerId, name: msg.name || name });
+          const single = !!(msg.players || []).some((p) => p.isBot);
+          setSession({ code: msg.code, playerId: msg.playerId, name: msg.name || name, singlePlayer: single });
           break;
         }
         case "lobby_update": {
@@ -245,7 +246,7 @@ export default function App() {
     [handleMessage]
   );
 
-  const createRoom = () => {
+  const createRoom = (singlePlayer = false) => {
     const trimmed = name.trim();
     if (!trimmed) {
       setError("Enter your name");
@@ -254,7 +255,13 @@ export default function App() {
     setError("");
     setStatus("Connecting...");
     connect((ws) => {
-      ws.send(JSON.stringify({ type: "create_room", name: trimmed }));
+      ws.send(
+        JSON.stringify({
+          type: "create_room",
+          name: trimmed,
+          mode: singlePlayer ? "single" : "multi",
+        })
+      );
       setStatus("");
     });
   };
@@ -278,9 +285,10 @@ export default function App() {
     });
   };
 
-  // auto-rejoin saved session
+  // auto-rejoin saved session (skip single-player test sessions)
   useEffect(() => {
     if (!session || screen !== "landing") return;
+    if (session.singlePlayer) return;
     connect((ws) => {
       ws.send(JSON.stringify({ type: "rejoin_room", code: session.code, playerId: session.playerId }));
     });
@@ -352,15 +360,19 @@ export default function App() {
               <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter your name" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <button className="btn btn-primary w-full" onClick={createRoom}>Create Room</button>
-              <div className="space-y-2">
+              <button className="btn btn-primary w-full" onClick={() => createRoom(false)}>Create Multiplayer Room</button>
+              <button className="btn btn-ghost w-full" onClick={() => createRoom(true)}>Single Player (vs 2 Bots)</button>
+            </div>
+            <div className="space-y-2 pt-1">
+              <label className="block text-sm font-medium mb-1">Join existing room</label>
+              <div className="flex gap-2">
                 <input
                   className="input uppercase tracking-widest"
                   value={joinCode}
                   onChange={(e) => setJoinCode(e.target.value)}
                   placeholder="ROOM CODE"
                 />
-                <button className="btn btn-secondary w-full" onClick={joinRoom}>Join Room</button>
+                <button className="btn btn-secondary whitespace-nowrap" onClick={joinRoom}>Join</button>
               </div>
             </div>
             {status && <p className="text-sm text-slate-600">{status}</p>}
@@ -406,7 +418,9 @@ export default function App() {
             <div className="card p-6">
               <h3 className="font-semibold text-lg mb-2">Waiting for players</h3>
               <p className="text-sm text-slate-600 mb-4">
-                Exactly 3 players are required. Round 1 starts automatically once everyone joins.
+                {players.some((p) => p.isBot)
+                  ? "Single player test mode: you vs 2 bots. Round 1 starts automatically."
+                  : "Exactly 3 players are required. Round 1 starts automatically once everyone joins."}
               </p>
               <PlayerChips players={players} />
               <div className="mt-4 text-sm text-slate-700">
@@ -572,6 +586,7 @@ export default function App() {
                       <div className="font-medium truncate">
                         {p.name} {p.id === playerId ? <span className="text-slate-400">(you)</span> : null}
                         {p.isHost ? <span className="ml-1 text-amber-700 text-xs">(host)</span> : null}
+                        {p.isBot ? <span className="ml-1 text-slate-500 text-xs">(bot)</span> : null}
                       </div>
                     </div>
                     <div className="font-bold text-[#143524]">{p.score ?? 0}</div>
@@ -640,6 +655,7 @@ function PlayerChips({ players }) {
         <span key={p.id} className="pill bg-emerald-100 text-emerald-800 border border-emerald-200">
           {p.name}
           {p.isHost ? " (host)" : ""}
+          {p.isBot ? " (bot)" : ""}
         </span>
       ))}
       {Array.from({ length: Math.max(0, 3 - players.length) }).map((_, i) => (

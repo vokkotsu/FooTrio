@@ -33,6 +33,8 @@ async def broadcast_lobby(room):
 
 async def send_draft_prompts(room):
     for pid, attr in room.assignments.items():
+        if room.is_bot(pid):
+            continue
         await room.send_to(
             pid,
             {
@@ -91,6 +93,8 @@ async def begin_guessing(room):
     if room.state != "drafting":
         return
     room.start_guessing()
+    # bots submit guesses immediately
+    room._auto_guess_bots()
     constraints = room.current_constraints()
     await room.broadcast(
         {
@@ -98,11 +102,14 @@ async def begin_guessing(room):
             "round": room.round_number,
             "constraints": constraints,
             "secondsLeft": config.GUESS_COUNTDOWN,
-            "submittedCount": 0,
+            "submittedCount": len(room.guesses),
             "requiredCount": config.ROOM_SIZE,
         }
     )
-    schedule_guess_timeout(room)
+    if room.all_guessed():
+        await finalize_and_broadcast(room)
+    else:
+        schedule_guess_timeout(room)
 
 
 async def finalize_and_broadcast(room):
@@ -162,15 +169,24 @@ async def websocket_endpoint(ws: WebSocket):
 
         if msg_type == "create_room":
             name = (data.get("name") or "Player").strip() or "Player"
-            code = manager.create_room(player_id)
+            mode = (data.get("mode") or "multi").strip().lower()
+            single_player = mode == "single"
+            code = manager.create_room(player_id, single_player=single_player)
             room = manager.get_room(code)
             room.add_player(player_id, name, ws)
+            if single_player:
+                room.add_bot("Bot 1")
+                room.add_bot("Bot 2")
         elif msg_type == "join_room":
             name = (data.get("name") or "Player").strip() or "Player"
             code = (data.get("code") or "").strip().upper()
             room = manager.get_room(code)
             if room is None:
                 await ws.send_json({"type": "error", "message": "Room not found"})
+                await ws.close()
+                return
+            if room.single_player:
+                await ws.send_json({"type": "error", "message": "Single-player room"})
                 await ws.close()
                 return
             if room.state != "lobby":
