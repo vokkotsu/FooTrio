@@ -1,3 +1,4 @@
+import importlib.util
 import os
 import signal
 import subprocess
@@ -27,11 +28,38 @@ def cleanup():
                 pass
 
 
+def ensure_backend_deps():
+    required = ("fastapi", "uvicorn")
+    missing = [m for m in required if importlib.util.find_spec(m) is None]
+    if not missing:
+        return
+    req_file = os.path.join(BACKEND, "requirements.txt")
+    print(f"Installing backend dependencies ({', '.join(missing)} missing)...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", req_file])
+
+
+def ensure_frontend_deps():
+    if os.path.isdir(os.path.join(FRONTEND, "node_modules")):
+        return
+    npm = "npm.cmd" if os.name == "nt" else "npm"
+    print("Installing frontend dependencies (first run, this may take a minute)...")
+    subprocess.check_call([npm, "install"], cwd=FRONTEND)
+
+
 def main():
-    if not os.path.isdir(os.path.join(FRONTEND, "node_modules")):
-        print("Note: frontend dependencies not found. Run once:")
+    try:
+        ensure_backend_deps()
+        ensure_frontend_deps()
+    except subprocess.CalledProcessError as e:
+        print(f"\nDependency installation failed (exit code {e.returncode}).")
+        print("Please install manually:")
+        print("  cd backend && pip install -r requirements.txt")
         print("  cd frontend && npm install")
-        print()
+        sys.exit(e.returncode or 1)
+    except FileNotFoundError as e:
+        print(f"\nRequired tool not found: {e.filename or e}")
+        print("Make sure Python/pip and Node.js/npm are installed and on your PATH.")
+        sys.exit(1)
 
     # Backend (FastAPI + WebSockets)
     procs.append(
@@ -50,6 +78,7 @@ def main():
         )
     )
 
+    print()
     print("Backend:  http://localhost:8000  (ws://localhost:8000/ws)")
     print("Frontend: http://localhost:5173")
     print("Press Ctrl+C to stop both.")

@@ -72,25 +72,20 @@ Both scripts identify the relevant columns, merge club history per player, extra
 - Python 3.10+
 - Node.js 18+ and npm
 
-### Install dependencies (once)
-
-```bash
-cd backend && pip install -r requirements.txt
-cd ../frontend && npm install
-```
-
 ### Quick start (single command)
 
-From the project root, start both backend and frontend together:
+From the project root:
 
 ```bash
 python run.py
 ```
 
+On the first run this will automatically install missing backend (`pip install -r backend/requirements.txt`) and frontend (`npm install`) dependencies, then start both servers:
+
 - Backend: http://localhost:8000 (WebSocket: `ws://localhost:8000/ws`)
 - Frontend: http://localhost:5173
 
-Open the frontend URL, then choose **“Single Player (vs 2 Bots)”** for a quick test or create/join a multiplayer room. Press `Ctrl+C` to stop both.
+Open the frontend URL, then choose **“Single Player (vs 2 Bots)”** for a quick test or create/join a multiplayer room. Press `Ctrl+C` to stop both. (Requires Python 3.10+ and Node.js/npm on your PATH.)
 
 ### Run separately (optional)
 
