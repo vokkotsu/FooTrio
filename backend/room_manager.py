@@ -3,7 +3,7 @@ import random
 import string
 import time
 
-from data_loader import sample_options, find_player_matches, best_guess_for_constraints
+from data_loader import sample_options, find_player_matches, best_guess_for_constraints, get_options
 import config
 
 
@@ -146,13 +146,31 @@ class Room:
         self._auto_select_bots()
         return True
 
+    def _pick_bot_option(self, attr, options):
+        options = [o for o in (options or []) if o]
+        if not options:
+            return None
+        opts = get_options()
+        priority = []
+        if attr == "country":
+            priority = opts.get("top_fifa_countries") or []
+        elif attr == "club":
+            priority = opts.get("top5_league_clubs") or []
+        priority_in_options = [o for o in options if o in set(priority)]
+        others = [o for o in options if o not in set(priority_in_options)]
+        # most likely choose from the biased/top picks when available
+        if priority_in_options and (not others or random.random() < 0.8):
+            return random.choice(priority_in_options)
+        return random.choice(options)
+
     def _auto_select_bots(self):
         for pid in list(self.bot_ids):
             if pid in self.selections:
                 continue
             options = self.draft_options.get(pid) or []
-            if options:
-                self.selections[pid] = random.choice(options)
+            choice = self._pick_bot_option(self.assignments.get(pid), options)
+            if choice is not None:
+                self.selections[pid] = choice
 
     def _auto_guess_bots(self):
         if self.state != "guessing":
@@ -189,8 +207,9 @@ class Room:
                 if attr:
                     options = sample_options(attr, config.DRAFT_OPTIONS)
                     self.draft_options[pid] = options
-            if options:
-                self.selections[pid] = random.choice(options)
+            choice = self._pick_bot_option(self.assignments.get(pid), options)
+            if choice is not None:
+                self.selections[pid] = choice
                 changed = True
         return changed
 
