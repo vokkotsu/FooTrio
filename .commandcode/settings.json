@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(Get-Content:*)",
+      "Shell(Measure-Object:*)",
+      "powershell",
+      "Shell(New-Item:*)",
+      "Shell(Out-Null:*)",
+      "Shell(ok:*)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}
