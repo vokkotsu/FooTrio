@@ -72,27 +72,39 @@ Both scripts identify the relevant columns, merge club history per player, extra
 - Python 3.10+
 - Node.js 18+ and npm
 
-### 1. Backend
+### Install dependencies (once)
 
 ```bash
+cd backend && pip install -r requirements.txt
+cd ../frontend && npm install
+```
+
+### Quick start (single command)
+
+From the project root, start both backend and frontend together:
+
+```bash
+python run.py
+```
+
+- Backend: http://localhost:8000 (WebSocket: `ws://localhost:8000/ws`)
+- Frontend: http://localhost:5173
+
+Open the frontend URL, then choose **“Single Player (vs 2 Bots)”** for a quick test or create/join a multiplayer room. Press `Ctrl+C` to stop both.
+
+### Run separately (optional)
+
+**Backend**
+```bash
 cd backend
-pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 ```
 
-The WebSocket endpoint is `ws://localhost:8000/ws` and a health check is available at `http://localhost:8000/`.
-
-### 2. Frontend
-
+**Frontend**
 ```bash
 cd frontend
-npm install
 npm run dev
 ```
-
-Open the URL shown by Vite (typically `http://localhost:5173`).
-- **Single player (test):** click **“Single Player (vs 2 Bots)”** to start immediately with 2 server-side bots that auto-draft and auto-guess.
-- **Multiplayer:** click **“Create Multiplayer Room”** and have two others join with the room code (or open multiple browser windows/tabs). Once 3 players are in, Round 1 starts automatically.
 
 ## Configuration
 
