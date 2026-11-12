@@ -548,7 +548,7 @@ export default function App() {
                           );
                         })}
                       </div>
-                      {(draft.attribute === "country" || draft.attribute === "club") && !draft.selected && (
+                      {(draft.attribute === "country" || draft.attribute === "position" || draft.attribute === "club") && !draft.selected && (
                         <div className="mt-4 flex items-center gap-3">
                           <button
                             className="btn btn-ghost text-sm"
@@ -557,7 +557,11 @@ export default function App() {
                           >
                             Refresh picks ({draft.refreshesLeft ?? 0} left)
                           </button>
-                          <span className="text-xs text-slate-500">Get a new set of 5 options (keeps 3/5 bias).</span>
+                          <span className="text-xs text-slate-500">
+                            {draft.attribute === "position"
+                              ? "Get a new set of 5 sub-position options."
+                              : "Get a new set of 5 options (keeps 3/5 bias)."}
+                          </span>
                         </div>
                       )}
                     </>

@@ -15,6 +15,7 @@ PLAYER_COLUMNS = {
     "player_id": "player_id",
     "player_name": "name",
     "position": "position",
+    "sub_position": "sub_position",
     "country": "country_of_citizenship",
     "current_club": "current_club_name",
 }
@@ -152,7 +153,7 @@ def main() -> None:
         low_memory=False,
     ).rename(columns={v: k for k, v in TRANSFER_COLUMNS.items()})
 
-    for col in ["player_id", "player_name", "position", "country", "current_club"]:
+    for col in ["player_id", "player_name", "position", "sub_position", "country", "current_club"]:
         players_df[col] = clean_text(players_df[col])
     for col in ["player_id", "from_club", "to_club"]:
         transfers_df[col] = clean_text(transfers_df[col])
@@ -163,6 +164,7 @@ def main() -> None:
         & (players_df["player_name"] != "")
         & (players_df["position"] != "")
         & (players_df["position"] != "Missing")
+        & (players_df["sub_position"] != "")
         & (players_df["country"] != "")
     ].copy()
 
@@ -183,6 +185,7 @@ def main() -> None:
     players = []
     countries = set()
     positions = set()
+    sub_positions = set()
     clubs = set()
     for _, row in players_df.iterrows():
         pid = row["player_id"]
@@ -192,13 +195,15 @@ def main() -> None:
         record = {
             "player_id": pid,
             "name": row["player_name"],
-            "position": row["position"],
+            "position": row["sub_position"],
+            "main_position": row["position"],
             "country": row["country"],
             "clubs": player_clubs,
         }
         players.append(record)
         countries.add(record["country"])
-        positions.add(record["position"])
+        positions.add(row["position"])
+        sub_positions.add(row["sub_position"])
         clubs.update(player_clubs)
 
     # name index prefers richer club histories for ambiguous same-name matches
@@ -226,7 +231,9 @@ def main() -> None:
         "name_index": name_index,
         "options": {
             "countries": sorted(countries),
-            "positions": sorted(positions),
+            "positions": sorted(sub_positions),
+            "sub_positions": sorted(sub_positions),
+            "main_positions": sorted(positions),
             "clubs": sorted(clubs),
             "top_fifa_countries": top_fifa_countries,
             "top5_league_clubs": top5_league_clubs,
@@ -235,6 +242,7 @@ def main() -> None:
             "player_count": len(players),
             "country_count": len(countries),
             "position_count": len(positions),
+            "sub_position_count": len(sub_positions),
             "club_count": len(clubs),
             "top_fifa_country_count": len(top_fifa_countries),
             "top5_league_club_count": len(top5_league_clubs),

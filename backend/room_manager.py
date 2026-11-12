@@ -143,7 +143,7 @@ class Room:
             attr = attrs[(i + self.assignment_offset) % len(attrs)]
             self.assignments[pid] = attr
             self.draft_options[pid] = sample_options(attr, config.DRAFT_OPTIONS)
-            self.draft_refreshes_left[pid] = 3 if attr in ("country", "club") else 0
+            self.draft_refreshes_left[pid] = 3 if attr in ("country", "position", "club") else 0
 
         # auto-select for bots
         self._auto_select_bots()
@@ -207,7 +207,7 @@ class Room:
         if pid in self.selections:
             return False, "Already selected", None, 0
         attr = self.assignments.get(pid)
-        if attr not in ("country", "club"):
+        if attr not in ("country", "position", "club"):
             return False, "Refresh not available for this attribute", None, 0
         left = self.draft_refreshes_left.get(pid, 0)
         if left <= 0:

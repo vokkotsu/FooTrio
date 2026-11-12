@@ -12,6 +12,7 @@ PLAYER_COLUMNS = {
     "player_id": "player_id",
     "player_name": "name",
     "position": "position",
+    "sub_position": "sub_position",
     "country": "country_of_citizenship",
     "current_club": "current_club_name",
 }
@@ -140,9 +141,10 @@ def main():
             pid = clean(row.get(PLAYER_COLUMNS["player_id"]))
             name = clean(row.get(PLAYER_COLUMNS["player_name"]))
             position = clean(row.get(PLAYER_COLUMNS["position"]))
+            sub_position = clean(row.get(PLAYER_COLUMNS["sub_position"]))
             country = clean(row.get(PLAYER_COLUMNS["country"]))
             current_club = clean(row.get(PLAYER_COLUMNS["current_club"]))
-            if not pid or not name or not position or position == "Missing" or not country:
+            if not pid or not name or not position or position == "Missing" or not sub_position or not country:
                 continue
             clubs = set()
             if is_valid_club(current_club):
@@ -151,6 +153,7 @@ def main():
                 "player_id": pid,
                 "name": name,
                 "position": position,
+                "sub_position": sub_position,
                 "country": country,
                 "clubs": clubs,
             }
@@ -169,6 +172,7 @@ def main():
     records = []
     countries = set()
     positions = set()
+    sub_positions = set()
     clubs_pool = set()
     for p in players.values():
         club_list = sorted({c for c in p["clubs"] if is_valid_club(c)})
@@ -177,13 +181,15 @@ def main():
         rec = {
             "player_id": p["player_id"],
             "name": p["name"],
-            "position": p["position"],
+            "position": p["sub_position"],
+            "main_position": p["position"],
             "country": p["country"],
             "clubs": club_list,
         }
         records.append(rec)
         countries.add(rec["country"])
-        positions.add(rec["position"])
+        positions.add(p["position"])
+        sub_positions.add(p["sub_position"])
         clubs_pool.update(club_list)
 
     # index by normalized name; prefer richer records first so ambiguous guesses resolve better
@@ -209,7 +215,9 @@ def main():
         "name_index": dict(name_index),
         "options": {
             "countries": sorted(countries),
-            "positions": sorted(positions),
+            "positions": sorted(sub_positions),
+            "sub_positions": sorted(sub_positions),
+            "main_positions": sorted(positions),
             "clubs": sorted(clubs_pool),
             "top_fifa_countries": top_fifa_countries,
             "top5_league_clubs": top5_league_clubs,
@@ -218,6 +226,7 @@ def main():
             "player_count": len(records),
             "country_count": len(countries),
             "position_count": len(positions),
+            "sub_position_count": len(sub_positions),
             "club_count": len(clubs_pool),
             "top_fifa_country_count": len(top_fifa_countries),
             "top5_league_club_count": len(top5_league_clubs),
