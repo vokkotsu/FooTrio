@@ -24,6 +24,77 @@ TRANSFER_COLUMNS = {
     "to_club": "to_club_name",
 }
 
+TOP_FIFA_COUNTRIES = [
+    "Argentina",
+    "France",
+    "Spain",
+    "England",
+    "Brazil",
+    "Portugal",
+    "Netherlands",
+    "Belgium",
+    "Germany",
+    "Croatia",
+]
+
+TOP5_LEAGUE_CLUBS = [
+    # Premier League
+    "Manchester City",
+    "Arsenal FC",
+    "Liverpool FC",
+    "Aston Villa",
+    "Tottenham Hotspur",
+    "Chelsea FC",
+    "Newcastle United",
+    "Manchester United",
+    "West Ham United",
+    "Brighton & Hove Albion",
+    # La Liga
+    "Real Madrid",
+    "FC Barcelona",
+    "Girona FC",
+    "Atlético de Madrid",
+    "Athletic Bilbao",
+    "Real Sociedad",
+    "Real Betis Balompié",
+    "Villarreal CF",
+    "Valencia CF",
+    "Sevilla FC",
+    # Bundesliga
+    "Bayer 04 Leverkusen",
+    "Bayern Munich",
+    "VfB Stuttgart",
+    "RB Leipzig",
+    "Borussia Dortmund",
+    "Eintracht Frankfurt",
+    "TSG 1899 Hoffenheim",
+    "1.FC Union Berlin",
+    "SC Freiburg",
+    "VfL Wolfsburg",
+    # Serie A
+    "Inter Milan",
+    "AC Milan",
+    "Juventus FC",
+    "Atalanta BC",
+    "Bologna FC 1909",
+    "AS Roma",
+    "SS Lazio",
+    "ACF Fiorentina",
+    "SSC Napoli",
+    "Torino FC",
+    # Ligue 1
+    "Paris Saint-Germain",
+    "AS Monaco",
+    "Stade Brestois 29",
+    "LOSC Lille",
+    "OGC Nice",
+    "Olympique Lyon",
+    "RC Lens",
+    "Olympique Marseille",
+    "Stade Rennais FC",
+    "Stade Reims",
+]
+
 
 def clean_text(series: pd.Series) -> pd.Series:
     return series.fillna("").astype(str).str.strip()
@@ -94,6 +165,9 @@ def main() -> None:
         positions.add(record["position"])
         clubs.update(player_clubs)
 
+    top_fifa_countries = [c for c in TOP_FIFA_COUNTRIES if c in countries]
+    top5_league_clubs = [c for c in TOP5_LEAGUE_CLUBS if c in clubs]
+
     data = {
         "identified_columns": {
             "players_csv": PLAYER_COLUMNS,
@@ -108,12 +182,16 @@ def main() -> None:
             "countries": sorted(countries),
             "positions": sorted(positions),
             "clubs": sorted(clubs),
+            "top_fifa_countries": top_fifa_countries,
+            "top5_league_clubs": top5_league_clubs,
         },
         "stats": {
             "player_count": len(players),
             "country_count": len(countries),
             "position_count": len(positions),
             "club_count": len(clubs),
+            "top_fifa_country_count": len(top_fifa_countries),
+            "top5_league_club_count": len(top5_league_clubs),
         },
     }
 

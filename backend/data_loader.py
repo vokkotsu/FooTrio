@@ -20,6 +20,37 @@ def get_options():
     return load_game_data()["options"]
 
 
+def _sample_weighted(pool, priority_pool, k, priority_count):
+    pool = list(pool)
+    priority = [x for x in priority_pool if x in pool]
+    others = [x for x in pool if x not in set(priority)]
+
+    if len(pool) <= k:
+        return list(pool)
+
+    p_count = min(priority_count, k, len(priority))
+    o_count = k - p_count
+    if o_count > len(others):
+        # not enough non-priority options; fill remainder from priority
+        o_count = len(others)
+        p_count = min(k - o_count, len(priority))
+
+    chosen = []
+    if p_count > 0 and priority:
+        chosen.extend(random.sample(priority, p_count))
+    if o_count > 0 and others:
+        chosen.extend(random.sample(others, o_count))
+
+    remaining_needed = k - len(chosen)
+    if remaining_needed > 0:
+        remaining = [x for x in pool if x not in set(chosen)]
+        if remaining:
+            chosen.extend(random.sample(remaining, min(remaining_needed, len(remaining))))
+
+    random.shuffle(chosen)
+    return chosen
+
+
 def sample_options(attribute, k=5):
     options = get_options()
     key_map = {
@@ -27,7 +58,20 @@ def sample_options(attribute, k=5):
         "position": "positions",
         "club": "clubs",
     }
-    pool = options.get(key_map.get(attribute, attribute), [])
+    key = key_map.get(attribute, attribute)
+    pool = options.get(key, [])
+
+    if attribute == "country":
+        priority = options.get("top_fifa_countries") or []
+        if priority:
+            # ensure 3/5 come from top 10 FIFA-ranked countries (when available)
+            return _sample_weighted(pool, priority, k, priority_count=min(3, k))
+    elif attribute == "club":
+        priority = options.get("top5_league_clubs") or []
+        if priority:
+            # ensure 3/5 come from Europe top 5 leagues (when available)
+            return _sample_weighted(pool, priority, k, priority_count=min(3, k))
+
     if len(pool) <= k:
         return list(pool)
     return random.sample(pool, k)

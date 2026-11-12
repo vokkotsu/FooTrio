@@ -26,6 +26,78 @@ def clean(v):
     return (v or "").strip()
 
 
+TOP_FIFA_COUNTRIES = [
+    "Argentina",
+    "France",
+    "Spain",
+    "England",
+    "Brazil",
+    "Portugal",
+    "Netherlands",
+    "Belgium",
+    "Germany",
+    "Croatia",
+]
+
+TOP5_LEAGUE_CLUBS = [
+    # Premier League
+    "Manchester City",
+    "Arsenal FC",
+    "Liverpool FC",
+    "Aston Villa",
+    "Tottenham Hotspur",
+    "Chelsea FC",
+    "Newcastle United",
+    "Manchester United",
+    "West Ham United",
+    "Brighton & Hove Albion",
+    # La Liga
+    "Real Madrid",
+    "FC Barcelona",
+    "Girona FC",
+    "Atlético de Madrid",
+    "Athletic Bilbao",
+    "Real Sociedad",
+    "Real Betis Balompié",
+    "Villarreal CF",
+    "Valencia CF",
+    "Sevilla FC",
+    # Bundesliga
+    "Bayer 04 Leverkusen",
+    "Bayern Munich",
+    "VfB Stuttgart",
+    "RB Leipzig",
+    "Borussia Dortmund",
+    "Eintracht Frankfurt",
+    "TSG 1899 Hoffenheim",
+    "1.FC Union Berlin",
+    "SC Freiburg",
+    "VfL Wolfsburg",
+    # Serie A
+    "Inter Milan",
+    "AC Milan",
+    "Juventus FC",
+    "Atalanta BC",
+    "Bologna FC 1909",
+    "AS Roma",
+    "SS Lazio",
+    "ACF Fiorentina",
+    "SSC Napoli",
+    "Torino FC",
+    # Ligue 1
+    "Paris Saint-Germain",
+    "AS Monaco",
+    "Stade Brestois 29",
+    "LOSC Lille",
+    "OGC Nice",
+    "Olympique Lyon",
+    "RC Lens",
+    "Olympique Marseille",
+    "Stade Rennais FC",
+    "Stade Reims",
+]
+
+
 def main():
     players = {}
     with open(PLAYERS_CSV, newline="", encoding="utf-8") as f:
@@ -86,6 +158,9 @@ def main():
         norm = " ".join(p["name"].lower().split())
         name_index[norm].append(p["player_id"])
 
+    top_fifa_countries = [c for c in TOP_FIFA_COUNTRIES if c in countries]
+    top5_league_clubs = [c for c in TOP5_LEAGUE_CLUBS if c in clubs_pool]
+
     data = {
         "identified_columns": {
             "players_csv": PLAYER_COLUMNS,
@@ -98,12 +173,16 @@ def main():
             "countries": sorted(countries),
             "positions": sorted(positions),
             "clubs": sorted(clubs_pool),
+            "top_fifa_countries": top_fifa_countries,
+            "top5_league_clubs": top5_league_clubs,
         },
         "stats": {
             "player_count": len(records),
             "country_count": len(countries),
             "position_count": len(positions),
             "club_count": len(clubs_pool),
+            "top_fifa_country_count": len(top_fifa_countries),
+            "top5_league_club_count": len(top5_league_clubs),
         },
     }
 
