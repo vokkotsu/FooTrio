@@ -547,10 +547,10 @@ export default function App() {
                     <>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {(draft.options || []).map((opt) => {
-                          const selected = draft.selected === opt;
+                          const selected = isSameOption(draft.selected, opt);
                           return (
                             <button
-                              key={opt}
+                              key={optionKey(opt)}
                               onClick={() => selectOption(opt)}
                               disabled={!!draft.selected}
                               className={`text-left rounded-xl border px-4 py-3 font-medium transition ${
@@ -559,7 +559,7 @@ export default function App() {
                                   : "bg-white hover:bg-emerald-50 border-emerald-200 text-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
                               } ${draft.selected && !selected ? "opacity-60" : ""}`}
                             >
-                              {opt}
+                              {displayValue(opt)}
                             </button>
                           );
                         })}
@@ -605,7 +605,7 @@ export default function App() {
                     <div className="mt-5 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 dark:bg-amber-900/30 dark:border-amber-700 dark:text-amber-100">
                       <p className="font-semibold">Waiting for others...</p>
                       <p className="text-sm mt-1">
-                        You selected <span className="font-bold">{draft.selected}</span>. The 3 attributes will be revealed once everyone has chosen or when the draft timer ends ({draftSecondsLeft}s left).
+                        You selected <span className="font-bold">{displayValue(draft.selected)}</span>. The 3 attributes will be revealed once everyone has chosen or when the draft timer ends ({draftSecondsLeft}s left).
                       </p>
                     </div>
                   )}
@@ -644,9 +644,9 @@ export default function App() {
               <div className="mb-4">
                 <p className="text-sm text-slate-600 dark:text-slate-300 mb-2">Constraints (all 3 revealed):</p>
                 <div className="flex flex-wrap gap-2">
-                  <ConstraintChip label="Country" value={constraints?.country} />
-                  <ConstraintChip label="Position" value={constraints?.position} />
-                  <ConstraintChip label="Club" value={constraints?.club} />
+                  <ConstraintChip label="Country" value={displayValue(constraints?.country)} />
+                  <ConstraintChip label="Position" value={displayValue(constraints?.position)} />
+                  <ConstraintChip label="Club" value={displayValue(constraints?.club)} />
                 </div>
               </div>
               {!guessInfo.submitted ? (
@@ -711,9 +711,9 @@ export default function App() {
               <div className="mb-4">
                 <p className="text-sm text-slate-600 dark:text-slate-300 mb-2">Constraints</p>
                 <div className="flex flex-wrap gap-2">
-                  <ConstraintChip label="Country" value={result.constraints?.country} />
-                  <ConstraintChip label="Position" value={result.constraints?.position} />
-                  <ConstraintChip label="Club" value={result.constraints?.club} />
+                  <ConstraintChip label="Country" value={displayValue(result.constraints?.country)} />
+                  <ConstraintChip label="Position" value={displayValue(result.constraints?.position)} />
+                  <ConstraintChip label="Club" value={displayValue(result.constraints?.club)} />
                 </div>
               </div>
 
@@ -840,7 +840,7 @@ export default function App() {
                     <div className="flex items-center justify-between mb-1.5 gap-2">
                       <span className="font-semibold text-slate-900 dark:text-slate-100">Round {h.round}</span>
                       <span className="text-xs text-slate-500 dark:text-slate-400 text-right">
-                        {h.constraints?.country} · {h.constraints?.position} · {h.constraints?.club}
+                        {displayValue(h.constraints?.country)} · {displayValue(h.constraints?.position)} · {displayValue(h.constraints?.club)}
                       </span>
                     </div>
                     <ul className="space-y-1.5">
@@ -873,6 +873,22 @@ export default function App() {
       </div>
     </Shell>
   );
+}
+
+function displayValue(v) {
+  if (v && typeof v === "object") return v.name ?? v.label ?? String(v.id ?? "");
+  return v ?? "";
+}
+
+function optionKey(v) {
+  if (v && typeof v === "object") return String(v.id ?? v.name ?? "");
+  return String(v ?? "");
+}
+
+function isSameOption(a, b) {
+  if (a == null || b == null) return false;
+  if (typeof a === "object" || typeof b === "object") return optionKey(a) === optionKey(b);
+  return a === b;
 }
 
 function Shell({ children }) {

@@ -14,10 +14,13 @@ PLAYER_COLUMNS = {
     "position": "position",
     "sub_position": "sub_position",
     "country": "country_of_citizenship",
+    "current_club_id": "current_club_id",
     "current_club": "current_club_name",
 }
 TRANSFER_COLUMNS = {
     "player_id": "player_id",
+    "from_club_id": "from_club_id",
+    "to_club_id": "to_club_id",
     "from_club": "from_club_name",
     "to_club": "to_club_name",
 }
@@ -47,16 +50,31 @@ def clean(v):
     return (v or "").strip()
 
 
-def is_valid_club(name):
+def clean_id(v):
+    cid = clean(v)
+    if not cid:
+        return ""
+    # csv ids may come as floats/ints-as-strings in some datasets
+    try:
+        if cid.endswith(".0"):
+            cid = str(int(float(cid)))
+    except Exception:
+        pass
+    return cid
+
+
+def is_valid_club(name, cid=""):
     n = clean(name)
-    if not n:
+    i = clean_id(cid)
+    if not n or not i:
         return False
     if n in INVALID_CLUBS:
         return False
     if n.lower() in {x.lower() for x in INVALID_CLUBS}:
         return False
-    # filter obvious non-club placeholders
     if n.startswith("---"):
+        return False
+    if i in {"0", "-1"}:
         return False
     return True
 
@@ -74,7 +92,7 @@ TOP_FIFA_COUNTRIES = [
     "Croatia",
 ]
 
-TOP5_LEAGUE_CLUBS = [
+TOP5_LEAGUE_CLUB_NAMES = [
     # Premier League
     "Manchester City",
     "Arsenal FC",
@@ -133,8 +151,20 @@ TOP5_LEAGUE_CLUBS = [
 ]
 
 
+def register_club(club_name_by_id, cid, name):
+    cid = clean_id(cid)
+    name = clean(name)
+    if not is_valid_club(name, cid):
+        return
+    # keep first seen non-empty name for an id (stable)
+    if cid not in club_name_by_id:
+        club_name_by_id[cid] = name
+
+
 def main():
     players = {}
+    club_name_by_id = {}
+
     with open(PLAYERS_CSV, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
@@ -143,12 +173,14 @@ def main():
             position = clean(row.get(PLAYER_COLUMNS["position"]))
             sub_position = clean(row.get(PLAYER_COLUMNS["sub_position"]))
             country = clean(row.get(PLAYER_COLUMNS["country"]))
+            current_club_id = clean_id(row.get(PLAYER_COLUMNS["current_club_id"]))
             current_club = clean(row.get(PLAYER_COLUMNS["current_club"]))
             if not pid or not name or not position or position == "Missing" or not sub_position or not country:
                 continue
             clubs = set()
-            if is_valid_club(current_club):
-                clubs.add(current_club)
+            if is_valid_club(current_club, current_club_id):
+                register_club(club_name_by_id, current_club_id, current_club)
+                clubs.add(current_club_id)
             players[pid] = {
                 "player_id": pid,
                 "name": name,
@@ -164,19 +196,21 @@ def main():
             pid = clean(row.get(TRANSFER_COLUMNS["player_id"]))
             if not pid or pid not in players:
                 continue
-            for key in ("from_club", "to_club"):
-                c = clean(row.get(TRANSFER_COLUMNS[key]))
-                if is_valid_club(c):
-                    players[pid]["clubs"].add(c)
+            for id_key, name_key in (("from_club_id", "from_club"), ("to_club_id", "to_club")):
+                cid = clean_id(row.get(TRANSFER_COLUMNS[id_key]))
+                cname = clean(row.get(TRANSFER_COLUMNS[name_key]))
+                if is_valid_club(cname, cid):
+                    register_club(club_name_by_id, cid, cname)
+                    players[pid]["clubs"].add(cid)
 
     records = []
     countries = set()
     positions = set()
     sub_positions = set()
-    clubs_pool = set()
+    clubs_pool_ids = set()
     for p in players.values():
-        club_list = sorted({c for c in p["clubs"] if is_valid_club(c)})
-        if not club_list:
+        club_ids = sorted({cid for cid in p["clubs"] if cid in club_name_by_id})
+        if not club_ids:
             continue
         rec = {
             "player_id": p["player_id"],
@@ -184,13 +218,13 @@ def main():
             "position": p["sub_position"],
             "main_position": p["position"],
             "country": p["country"],
-            "clubs": club_list,
+            "clubs": club_ids,
         }
         records.append(rec)
         countries.add(rec["country"])
         positions.add(p["position"])
         sub_positions.add(p["sub_position"])
-        clubs_pool.update(club_list)
+        clubs_pool_ids.update(club_ids)
 
     # index by normalized name; prefer richer records first so ambiguous guesses resolve better
     by_id = {p["player_id"]: p for p in records}
@@ -202,14 +236,28 @@ def main():
         ids.sort(key=lambda pid: (-len(by_id[pid]["clubs"]), by_id[pid]["name"], pid))
         name_index[norm] = ids
 
+    clubs_options = [
+        {"id": cid, "name": club_name_by_id[cid]}
+        for cid in sorted(clubs_pool_ids, key=lambda c: (club_name_by_id[c].lower(), c))
+    ]
+
+    # map top-5 league names to ids present in pool (by exact name match)
+    clubs_by_name = {}
+    for cid in clubs_pool_ids:
+        clubs_by_name.setdefault(club_name_by_id[cid], []).append(cid)
+    top5_league_clubs = []
+    for name in TOP5_LEAGUE_CLUB_NAMES:
+        ids_for_name = sorted(clubs_by_name.get(name, []))
+        if ids_for_name:
+            top5_league_clubs.append({"id": ids_for_name[0], "name": name})
+
     top_fifa_countries = [c for c in TOP_FIFA_COUNTRIES if c in countries]
-    top5_league_clubs = [c for c in TOP5_LEAGUE_CLUBS if c in clubs_pool]
 
     data = {
         "identified_columns": {
             "players_csv": PLAYER_COLUMNS,
             "transfers_csv": TRANSFER_COLUMNS,
-            "notes": "Club/Club History is derived from players.current_club_name plus transfers.from_club_name and transfers.to_club_name joined on player_id.",
+            "notes": "Club/Club History is derived from current_club_id/name plus transfers from/to club ids/names joined on player_id. Clubs use stable IDs for matching.",
         },
         "players": records,
         "name_index": dict(name_index),
@@ -218,7 +266,7 @@ def main():
             "positions": sorted(sub_positions),
             "sub_positions": sorted(sub_positions),
             "main_positions": sorted(positions),
-            "clubs": sorted(clubs_pool),
+            "clubs": clubs_options,
             "top_fifa_countries": top_fifa_countries,
             "top5_league_clubs": top5_league_clubs,
         },
@@ -227,7 +275,7 @@ def main():
             "country_count": len(countries),
             "position_count": len(positions),
             "sub_position_count": len(sub_positions),
-            "club_count": len(clubs_pool),
+            "club_count": len(clubs_options),
             "top_fifa_country_count": len(top_fifa_countries),
             "top5_league_club_count": len(top5_league_clubs),
         },

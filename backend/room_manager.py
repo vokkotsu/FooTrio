@@ -3,7 +3,15 @@ import random
 import string
 import time
 
-from data_loader import sample_options, find_player_matches, best_guess_for_constraints, get_options, club_matches
+from data_loader import (
+    sample_options,
+    find_player_matches,
+    best_guess_for_constraints,
+    get_options,
+    club_matches,
+    club_id,
+    club_display,
+)
 import config
 
 
@@ -161,8 +169,14 @@ class Room:
             priority = opts.get("top_fifa_countries") or []
         elif attr == "club":
             priority = opts.get("top5_league_clubs") or []
-        priority_in_options = [o for o in options if o in set(priority)]
-        others = [o for o in options if o not in set(priority_in_options)]
+        if attr == "club":
+            priority_keys = {club_id(o) for o in priority}
+            priority_in_options = [o for o in options if club_id(o) in priority_keys]
+            others = [o for o in options if club_id(o) not in priority_keys]
+        else:
+            priority_set = set(priority)
+            priority_in_options = [o for o in options if o in priority_set]
+            others = [o for o in options if o not in priority_set]
         # most likely choose from the biased/top picks when available
         if priority_in_options and (not others or random.random() < 0.8):
             return random.choice(priority_in_options)
@@ -196,6 +210,13 @@ class Room:
             return False, "Already selected"
         attr = self.assignments[pid]
         options = self.draft_options.get(pid, [])
+        if attr == "club":
+            target = club_id(value)
+            match = next((o for o in options if club_id(o) == target), None)
+            if not match:
+                return False, "Invalid selection"
+            self.selections[pid] = match
+            return True, None
         if value not in options:
             return False, "Invalid selection"
         self.selections[pid] = value
@@ -215,15 +236,19 @@ class Room:
         if left <= 0:
             return False, "No refreshes left", None, 0
 
-        current = set(self.draft_options.get(pid) or [])
+        current_options = self.draft_options.get(pid) or []
         options = sample_options(attr, config.DRAFT_OPTIONS)
         # try to provide a completely new set of options when possible (bias preserved by sample_options)
+        def _opt_key(o):
+            return club_id(o) if attr == "club" else o
+
+        current_keys = {_opt_key(o) for o in current_options}
         best_options = options
-        best_overlap = len(set(options) & current)
-        if best_overlap > 0 and current:
+        best_overlap = len({_opt_key(o) for o in options} & current_keys)
+        if best_overlap > 0 and current_keys:
             for _ in range(25):
                 candidate = sample_options(attr, config.DRAFT_OPTIONS)
-                overlap = len(set(candidate) & current)
+                overlap = len({_opt_key(o) for o in candidate} & current_keys)
                 if overlap < best_overlap:
                     best_options = candidate
                     best_overlap = overlap
@@ -301,7 +326,7 @@ class Room:
         # ambiguous-name collisions (e.g. different players sharing the same name)
         best = None
         for player in matches:
-            clubs = [c for c in (player.get("clubs") or []) if isinstance(c, str) and c.strip()]
+            clubs = [club_id(c) for c in (player.get("clubs") or []) if club_id(c)]
             breakdown = {
                 "country": player.get("country") == constraints.get("country"),
                 "position": player.get("position") == constraints.get("position"),

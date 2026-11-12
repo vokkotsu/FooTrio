@@ -1,8 +1,6 @@
 import json
 import os
 import random
-import re
-import unicodedata
 from functools import lru_cache
 
 DATA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "game_data.json")
@@ -22,10 +20,33 @@ def get_options():
     return load_game_data()["options"]
 
 
+@lru_cache(maxsize=1)
+def get_clubs_by_id():
+    clubs = get_options().get("clubs", []) or []
+    out = {}
+    for c in clubs:
+        if isinstance(c, dict):
+            cid = str(c.get("id", ""))
+            if cid:
+                out[cid] = c
+        elif isinstance(c, str):
+            out[c] = {"id": c, "name": c}
+    return out
+
+
+def _club_value_key(value):
+    if isinstance(value, dict):
+        return str(value.get("id", ""))
+    return str(value)
+
+
 def _sample_weighted(pool, priority_pool, k, priority_count):
     pool = list(pool)
-    priority = [x for x in priority_pool if x in pool]
-    others = [x for x in pool if x not in set(priority)]
+    pool_by_key = {_club_value_key(x): x for x in pool}
+    priority_keys = [_club_value_key(x) for x in priority_pool if _club_value_key(x) in pool_by_key]
+    priority = [pool_by_key[kid] for kid in dict.fromkeys(priority_keys)]
+    priority_key_set = set(_club_value_key(x) for x in priority)
+    others = [x for x in pool if _club_value_key(x) not in priority_key_set]
 
     if len(pool) <= k:
         return list(pool)
@@ -45,7 +66,8 @@ def _sample_weighted(pool, priority_pool, k, priority_count):
 
     remaining_needed = k - len(chosen)
     if remaining_needed > 0:
-        remaining = [x for x in pool if x not in set(chosen)]
+        chosen_keys = set(_club_value_key(x) for x in chosen)
+        remaining = [x for x in pool if _club_value_key(x) not in chosen_keys]
         if remaining:
             chosen.extend(random.sample(remaining, min(remaining_needed, len(remaining))))
 
@@ -83,73 +105,38 @@ def normalize_name(name: str) -> str:
     return " ".join((name or "").lower().split())
 
 
-def _normalize_club_key(name: str) -> str:
-    s = unicodedata.normalize("NFKD", name or "")
-    s = "".join(ch for ch in s if not unicodedata.combining(ch))
-    s = s.lower()
-    s = re.sub(r"[^a-z0-9]+", " ", s).strip()
-    s = re.sub(r"\s+", " ", s)
+def club_id(value):
+    if isinstance(value, dict):
+        cid = value.get("id")
+        return str(cid) if cid is not None else ""
+    if value is None:
+        return ""
+    return str(value)
+
+
+def club_display(value):
+    if isinstance(value, dict):
+        name = value.get("name")
+        if name:
+            return str(name)
+        cid = value.get("id")
+        return str(cid) if cid is not None else ""
+    if value is None:
+        return ""
+    s = str(value)
+    # fallback: resolve id to known name if possible
+    info = get_clubs_by_id().get(s)
+    if info:
+        return str(info.get("name") or s)
     return s
 
 
-_CLUB_ALIAS_CANON = {
-    "psg": "paris saint germain",
-    "paris sg": "paris saint germain",
-    "paris saint germain": "paris saint germain",
-    "paris st germain": "paris saint germain",
-    "paris saint germain fc": "paris saint germain",
-    "paris saint germain football club": "paris saint germain",
-    "man utd": "manchester united",
-    "man united": "manchester united",
-    "manchester united": "manchester united",
-    "manchester utd": "manchester united",
-    "manchester united fc": "manchester united",
-    "spurs": "tottenham hotspur",
-    "tottenham": "tottenham hotspur",
-    "tottenham hotspur": "tottenham hotspur",
-    "inter": "inter milan",
-    "internazionale": "inter milan",
-    "inter milan": "inter milan",
-    "fc internazionale milano": "inter milan",
-    "ac milan": "ac milan",
-    "milan": "ac milan",
-    "bayern munchen": "bayern munich",
-    "fc bayern munchen": "bayern munich",
-    "bayern munich": "bayern munich",
-    "atletico madrid": "atletico de madrid",
-    "atletico de madrid": "atletico de madrid",
-    "club atletico de madrid": "atletico de madrid",
-    "sporting cp": "sporting",
-    "sporting clube de portugal": "sporting",
-    "sporting lisbon": "sporting",
-    "borussia dortmund": "borussia dortmund",
-    "bor dortmund": "borussia dortmund",
-    "dortmund": "borussia dortmund",
-    "bvb": "borussia dortmund",
-    "ballspielverein borussia 09 dortmund": "borussia dortmund",
-    "borussia monchengladbach": "borussia monchengladbach",
-    "bor monchengladbach": "borussia monchengladbach",
-    "borussia m gladbach": "borussia monchengladbach",
-    "gladbach": "borussia monchengladbach",
-}
-
-
-def canonical_club_name(name: str) -> str:
-    n = _normalize_club_key(name)
-    if not n:
-        return ""
-    return _CLUB_ALIAS_CANON.get(n, n)
-
-
-def club_matches(constraint_club: str, player_clubs) -> bool:
-    target = canonical_club_name(constraint_club)
+def club_matches(constraint_club, player_clubs) -> bool:
+    target = club_id(constraint_club)
     if not target:
         return False
     for club in player_clubs or []:
-        c = canonical_club_name(club)
-        if not c:
-            continue
-        if c == target:
+        if club_id(club) == target:
             return True
     return False
 
