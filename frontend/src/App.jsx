@@ -443,7 +443,7 @@ export default function App() {
                     You are selecting: <span className="font-bold text-[#143524]">{draft.attributeLabel}</span>
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {draft.options.map((opt) => {
+                    {(draft.options || []).map((opt) => {
                       const selected = draft.selected === opt;
                       return (
                         <button
@@ -471,7 +471,24 @@ export default function App() {
                   )}
                 </>
               ) : (
-                <p className="text-slate-600">Preparing your draft options...</p>
+                <div className="space-y-3">
+                  <p className="text-slate-600">Preparing your draft options...</p>
+                  <p className="text-xs text-slate-500">
+                    If this stays stuck, restart <code>python run.py</code> (backend may be on old code) and click Retry.
+                  </p>
+                  <button
+                    className="btn btn-ghost text-sm"
+                    onClick={() =>
+                      send({
+                        type: "rejoin_room",
+                        code: session?.code || roomCode,
+                        playerId: session?.playerId || playerId,
+                      })
+                    }
+                  >
+                    Retry / Sync
+                  </button>
+                </div>
               )}
             </div>
           )}

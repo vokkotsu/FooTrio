@@ -56,6 +56,13 @@ async def send_draft_prompts(room):
     )
 
 
+async def send_state_sync(room):
+    for pid in room.players:
+        if room.is_bot(pid):
+            continue
+        await room.send_to(pid, room.state_snapshot(pid))
+
+
 async def start_round(room):
     if not room.all_players_connected():
         return
@@ -68,6 +75,8 @@ async def start_round(room):
         }
     )
     await send_draft_prompts(room)
+    # ensure each human has full state (reliable draft prompt delivery)
+    await send_state_sync(room)
     # if bots already satisfied all selections (e.g. no humans), advance
     if room.all_selected():
         await begin_guessing(room)
@@ -109,6 +118,7 @@ async def begin_guessing(room):
             "requiredCount": config.ROOM_SIZE,
         }
     )
+    await send_state_sync(room)
     if room.all_guessed():
         await finalize_and_broadcast(room)
     else:
@@ -236,20 +246,6 @@ async def websocket_endpoint(ws: WebSocket):
                 async with room.lock:
                     if room.state == "lobby" and room.all_players_connected():
                         await start_round(room)
-                        # ensure this player has current draft prompt if drafting
-                        if room.state == "drafting" and player_id in room.assignments and not room.is_bot(player_id):
-                            attr = room.assignments[player_id]
-                            await room.send_to(
-                                player_id,
-                                {
-                                    "type": "draft_prompt",
-                                    "round": room.round_number,
-                                    "attribute": attr,
-                                    "attributeLabel": config.ATTRIBUTE_LABELS.get(attr, attr),
-                                    "options": room.draft_options.get(player_id, []),
-                                    "selected": room.selections.get(player_id),
-                                },
-                            )
 
         while True:
             raw = await ws.receive_text()
