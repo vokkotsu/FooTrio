@@ -1,6 +1,8 @@
 import json
 import os
 import random
+import re
+import unicodedata
 from functools import lru_cache
 
 DATA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "game_data.json")
@@ -81,6 +83,68 @@ def normalize_name(name: str) -> str:
     return " ".join((name or "").lower().split())
 
 
+def _normalize_club_key(name: str) -> str:
+    s = unicodedata.normalize("NFKD", name or "")
+    s = "".join(ch for ch in s if not unicodedata.combining(ch))
+    s = s.lower()
+    s = re.sub(r"[^a-z0-9]+", " ", s).strip()
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+
+_CLUB_ALIAS_CANON = {
+    "psg": "paris saint germain",
+    "paris sg": "paris saint germain",
+    "paris saint germain": "paris saint germain",
+    "paris st germain": "paris saint germain",
+    "paris saint germain fc": "paris saint germain",
+    "paris saint germain football club": "paris saint germain",
+    "man utd": "manchester united",
+    "man united": "manchester united",
+    "manchester united": "manchester united",
+    "manchester utd": "manchester united",
+    "manchester united fc": "manchester united",
+    "spurs": "tottenham hotspur",
+    "tottenham": "tottenham hotspur",
+    "tottenham hotspur": "tottenham hotspur",
+    "inter": "inter milan",
+    "internazionale": "inter milan",
+    "inter milan": "inter milan",
+    "fc internazionale milano": "inter milan",
+    "ac milan": "ac milan",
+    "milan": "ac milan",
+    "bayern munchen": "bayern munich",
+    "fc bayern munchen": "bayern munich",
+    "bayern munich": "bayern munich",
+    "atletico madrid": "atletico de madrid",
+    "atletico de madrid": "atletico de madrid",
+    "club atletico de madrid": "atletico de madrid",
+    "sporting cp": "sporting",
+    "sporting clube de portugal": "sporting",
+    "sporting lisbon": "sporting",
+}
+
+
+def canonical_club_name(name: str) -> str:
+    n = _normalize_club_key(name)
+    if not n:
+        return ""
+    return _CLUB_ALIAS_CANON.get(n, n)
+
+
+def club_matches(constraint_club: str, player_clubs) -> bool:
+    target = canonical_club_name(constraint_club)
+    if not target:
+        return False
+    for club in player_clubs or []:
+        c = canonical_club_name(club)
+        if not c:
+            continue
+        if c == target:
+            return True
+    return False
+
+
 def find_player_matches(guess: str):
     data = load_game_data()
     norm = normalize_name(guess)
@@ -109,7 +173,7 @@ def best_guess_for_constraints(constraints: dict, rng: random.Random | None = No
             score += 1
         if position and p.get("position") == position:
             score += 1
-        if club and club in (p.get("clubs") or []):
+        if club and club_matches(club, p.get("clubs") or []):
             score += 1
         if score > best_score:
             best_score = score

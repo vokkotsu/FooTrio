@@ -3,7 +3,7 @@ import random
 import string
 import time
 
-from data_loader import sample_options, find_player_matches, best_guess_for_constraints, get_options
+from data_loader import sample_options, find_player_matches, best_guess_for_constraints, get_options, club_matches
 import config
 
 
@@ -303,7 +303,7 @@ class Room:
             breakdown = {
                 "country": player.get("country") == constraints.get("country"),
                 "position": player.get("position") == constraints.get("position"),
-                "club": constraints.get("club") in clubs,
+                "club": club_matches(constraints.get("club"), clubs),
             }
             points = sum(1 for v in breakdown.values() if v)
             club_history_len = len(set(clubs))
