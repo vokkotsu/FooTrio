@@ -118,6 +118,51 @@ npm run dev
 | client → server | `select_option` | Draft pick for assigned attribute |
 | client → server | `submit_guess` | Submit guessed player name |
 | server → client | `joined`, `lobby_update`, `state_sync` | Join/reconnect & lobby state |
+
+## Deploying (Frontend on Vercel + Backend on a WebSocket host)
+
+This game uses **WebSockets** and **in-memory room state**, so the backend must run on a platform that supports long-lived connections (not Vercel serverless functions). The recommended split is:
+
+- **Frontend (Vite/React)** → Vercel
+- **Backend (FastAPI + WebSockets)** → Render, Railway, Fly.io, or any host that supports Docker/WebSockets
+
+### 1) Deploy the backend (Render example)
+
+1. Push this repo to GitHub (if not already).
+2. In [Render](https://render.com), create a **Web Service** from the repo.
+   - **Option A (Blueprint):** Render can detect `render.yaml` in the repo root.
+   - **Option B (Manual):** Runtime **Docker**, Dockerfile path `backend/Dockerfile`, Docker build context `.` (repo root). Set health check path to `/`.
+3. Deploy and copy the service URL, e.g. `https://footrio-backend.onrender.com`.
+4. Verify: open `https://<your-backend>/` and confirm it returns `{"status":"ok","service":"football-trivia"}`. The WebSocket endpoint is `wss://<your-backend>/ws`.
+
+Notes:
+- `backend/Dockerfile` copies `backend/` and `game_data.json` from the repo root, so deploy from the **repository root** context.
+- Free tiers may sleep when idle (first connect can be slow) and in-memory rooms reset on restart/redeploy. For a demo this is usually fine.
+
+### 2) Deploy the frontend (Vercel)
+
+1. In [Vercel](https://vercel.com), **Add New Project** and import the same GitHub repo.
+2. Set **Root Directory** to `frontend`.
+3. Framework preset: **Vite** (auto-detected). Build command: `npm run build`. Output directory: `dist`.
+4. Add environment variable:
+   - `VITE_WS_URL` = `wss://<your-backend-host>/ws` (example: `wss://footrio-backend.onrender.com/ws`)
+5. Deploy. Open the Vercel URL and test creating/joining a room (single-player mode is the quickest check).
+
+`frontend/vercel.json` is included for SPA rewrites. If you change `VITE_WS_URL`, redeploy the frontend so the value is baked into the Vite build.
+
+### Local production-like test
+
+```bash
+# backend
+cd backend
+uvicorn main:app --host 0.0.0.0 --port 8000
+
+# frontend (in another terminal) with explicit WS URL
+cd frontend
+VITE_WS_URL=ws://localhost:8000/ws npm run build
+npm run preview
+```
+
 | server → client | `round_started`, `draft_prompt`, `draft_status` | Draft phase & options |
 | server → client | `guess_phase`, `guess_update` | Reveal constraints & guess timer |
 | server → client | `round_result`, `game_over` | Verification, scoring, standings, winner |

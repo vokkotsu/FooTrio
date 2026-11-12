@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: footrio-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    envVars:
+      - key: PORT
+        value: 8000
