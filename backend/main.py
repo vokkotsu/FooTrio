@@ -7,6 +7,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from room_manager import manager
+from data_loader import sample_options, search_player_names
 import config
 
 app = FastAPI(title="Football Trivia Multiplayer")
@@ -35,6 +36,10 @@ async def send_draft_prompts(room):
     for pid, attr in room.assignments.items():
         if room.is_bot(pid):
             continue
+        options = room.draft_options.get(pid, [])
+        if attr and not options:
+            options = sample_options(attr, config.DRAFT_OPTIONS)
+            room.draft_options[pid] = options
         await room.send_to(
             pid,
             {
@@ -42,8 +47,9 @@ async def send_draft_prompts(room):
                 "round": room.round_number,
                 "attribute": attr,
                 "attributeLabel": config.ATTRIBUTE_LABELS.get(attr, attr),
-                "options": room.draft_options.get(pid, []),
+                "options": options,
                 "selected": room.selections.get(pid),
+                "secondsLeft": room.draft_seconds_left() or config.DRAFT_COUNTDOWN,
             },
         )
     await room.broadcast(
@@ -52,6 +58,7 @@ async def send_draft_prompts(room):
             "round": room.round_number,
             "submittedCount": len(room.selections),
             "requiredCount": config.ROOM_SIZE,
+            "secondsLeft": room.draft_seconds_left() or config.DRAFT_COUNTDOWN,
         }
     )
 
@@ -80,6 +87,8 @@ async def start_round(room):
     # if bots already satisfied all selections (e.g. no humans), advance
     if room.all_selected():
         await begin_guessing(room)
+    else:
+        schedule_draft_timeout(room)
 
 
 def schedule_guess_timeout(room):
@@ -99,6 +108,36 @@ def schedule_guess_timeout(room):
                 room.guess_task = None
 
     room.guess_task = asyncio.create_task(_timeout())
+
+
+def schedule_draft_timeout(room):
+    room.cancel_draft_timer()
+
+    async def _timeout():
+        try:
+            await asyncio.sleep(config.DRAFT_COUNTDOWN)
+            async with room.lock:
+                if room.state != "drafting":
+                    return
+                room.auto_select_missing()
+                await room.broadcast(
+                    {
+                        "type": "draft_status",
+                        "round": room.round_number,
+                        "submittedCount": len(room.selections),
+                        "requiredCount": config.ROOM_SIZE,
+                        "secondsLeft": 0,
+                    }
+                )
+                if room.all_selected():
+                    await begin_guessing(room)
+        except asyncio.CancelledError:
+            return
+        finally:
+            if room.draft_task is asyncio.current_task():
+                room.draft_task = None
+
+    room.draft_task = asyncio.create_task(_timeout())
 
 
 async def begin_guessing(room):
@@ -276,6 +315,7 @@ async def websocket_endpoint(ws: WebSocket):
                             "round": room.round_number,
                             "submittedCount": len(room.selections),
                             "requiredCount": config.ROOM_SIZE,
+                            "secondsLeft": room.draft_seconds_left() or 0,
                         }
                     )
                     if room.all_selected():
@@ -299,6 +339,14 @@ async def websocket_endpoint(ws: WebSocket):
                     if room.all_guessed():
                         await finalize_and_broadcast(room)
 
+                elif t == "search_players":
+                    if room.state != "guessing":
+                        await ws.send_json({"type": "player_suggestions", "query": data.get("query") or "", "suggestions": []})
+                    else:
+                        q = (data.get("query") or "").strip()
+                        suggestions = search_player_names(q, 8) if q else []
+                        await ws.send_json({"type": "player_suggestions", "query": data.get("query") or "", "suggestions": suggestions})
+
                 elif t == "leave":
                     explicit_leave = True
                     break
@@ -316,6 +364,7 @@ async def websocket_endpoint(ws: WebSocket):
                 room.remove_player(player_id)
                 if not room.players:
                     room.cancel_guess_timer()
+                    room.cancel_draft_timer()
                     manager.remove_room(code)
                 else:
                     await room.broadcast(

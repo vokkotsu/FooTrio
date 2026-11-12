@@ -25,10 +25,12 @@ export default function App() {
   const [round, setRound] = useState(0);
 
   const [draft, setDraft] = useState(null); // {attribute, attributeLabel, options, selected}
-  const [draftStatus, setDraftStatus] = useState({ submittedCount: 0, requiredCount: 3 });
+  const [draftStatus, setDraftStatus] = useState({ submittedCount: 0, requiredCount: 3, secondsLeft: 30 });
+  const [draftSecondsLeft, setDraftSecondsLeft] = useState(30);
   const [constraints, setConstraints] = useState(null);
   const [guess, setGuess] = useState("");
-  const [guessInfo, setGuessInfo] = useState({ submitted: false, submittedCount: 0, requiredCount: 3, secondsLeft: 30 });
+  const [guessInfo, setGuessInfo] = useState({ submitted: false, submittedCount: 0, requiredCount: 3, secondsLeft: 60 });
+  const [suggestions, setSuggestions] = useState([]);
   const [result, setResult] = useState(null);
   const [gameOver, setGameOver] = useState(null);
   const [history, setHistory] = useState([]);
@@ -50,10 +52,12 @@ export default function App() {
 
   const resetRoundUi = useCallback(() => {
     setDraft(null);
-    setDraftStatus({ submittedCount: 0, requiredCount: 3 });
+    setDraftStatus({ submittedCount: 0, requiredCount: 3, secondsLeft: 30 });
+    setDraftSecondsLeft(30);
     setConstraints(null);
     setGuess("");
-    setGuessInfo({ submitted: false, submittedCount: 0, requiredCount: 3, secondsLeft: 30 });
+    setGuessInfo({ submitted: false, submittedCount: 0, requiredCount: 3, secondsLeft: 60 });
+    setSuggestions([]);
     setResult(null);
   }, []);
 
@@ -88,12 +92,15 @@ export default function App() {
         }
         case "draft_prompt": {
           setRound(msg.round || round);
+          const secs = msg.secondsLeft ?? 30;
           setDraft({
             attribute: msg.attribute,
             attributeLabel: msg.attributeLabel,
             options: msg.options || [],
             selected: msg.selected || null,
           });
+          setDraftSecondsLeft(secs);
+          setDraftStatus((s) => ({ ...s, secondsLeft: secs }));
           setScreen(msg.selected ? "waiting" : "drafting");
           break;
         }
@@ -103,10 +110,13 @@ export default function App() {
           break;
         }
         case "draft_status": {
+          const secs = msg.secondsLeft;
           setDraftStatus({
             submittedCount: msg.submittedCount ?? 0,
             requiredCount: msg.requiredCount ?? 3,
+            secondsLeft: secs ?? 0,
           });
+          if (typeof secs === "number") setDraftSecondsLeft(secs);
           break;
         }
         case "guess_phase": {
@@ -116,10 +126,15 @@ export default function App() {
             submitted: false,
             submittedCount: msg.submittedCount ?? 0,
             requiredCount: msg.requiredCount ?? 3,
-            secondsLeft: msg.secondsLeft ?? 30,
+            secondsLeft: msg.secondsLeft ?? 60,
           });
           setGuess("");
+          setSuggestions([]);
           setScreen("guessing");
+          break;
+        }
+        case "player_suggestions": {
+          setSuggestions(Array.isArray(msg.suggestions) ? msg.suggestions : []);
           break;
         }
         case "guess_update": {
@@ -161,6 +176,7 @@ export default function App() {
             resetRoundUi();
           } else if (msg.state === "drafting") {
             const d = msg.draft || {};
+            const secs = d.secondsLeft ?? 30;
             setDraft({
               attribute: d.attribute,
               attributeLabel: d.attributeLabel,
@@ -170,7 +186,9 @@ export default function App() {
             setDraftStatus({
               submittedCount: d.submittedCount ?? 0,
               requiredCount: d.requiredCount ?? 3,
+              secondsLeft: secs,
             });
+            setDraftSecondsLeft(secs);
             setScreen(d.selected ? "waiting" : "drafting");
           } else if (msg.state === "guessing") {
             setConstraints(msg.constraints || {});
@@ -178,8 +196,9 @@ export default function App() {
               submitted: !!msg.guess?.submitted,
               submittedCount: msg.guess?.submittedCount ?? 0,
               requiredCount: msg.guess?.requiredCount ?? 3,
-              secondsLeft: msg.guess?.secondsLeft ?? 30,
+              secondsLeft: msg.guess?.secondsLeft ?? 60,
             });
+            setSuggestions([]);
             setScreen("guessing");
           } else if (msg.state === "result" || msg.state === "game_over") {
             if (msg.result) setResult(msg.result);
@@ -305,6 +324,16 @@ export default function App() {
     return () => clearTimeout(t);
   }, [screen, guessInfo.secondsLeft]);
 
+  // draft countdown tick (client-side)
+  useEffect(() => {
+    if (screen !== "drafting" && screen !== "waiting") return;
+    if (draftSecondsLeft <= 0) return;
+    const t = setTimeout(() => {
+      setDraftSecondsLeft((s) => Math.max(0, s - 1));
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [screen, draftSecondsLeft]);
+
   const send = (payload) => {
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -317,15 +346,33 @@ export default function App() {
     send({ type: "select_option", value });
   };
 
-  const submitGuess = () => {
-    const text = guess.trim();
+  const submitGuess = (value) => {
+    const text = (value ?? guess).trim();
     if (!text) {
       setError("Enter a player name guess");
       return;
     }
     setError("");
+    setSuggestions([]);
     send({ type: "submit_guess", guess: text });
     setGuessInfo((g) => ({ ...g, submitted: true }));
+  };
+
+  const handleGuessChange = (e) => {
+    const val = e.target.value;
+    setGuess(val);
+    const q = val.trim();
+    if (q.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    send({ type: "search_players", query: q });
+  };
+
+  const pickSuggestion = (name) => {
+    setGuess(name);
+    setSuggestions([]);
+    submitGuess(name);
   };
 
   const leaveToHome = () => {
@@ -431,41 +478,67 @@ export default function App() {
 
           {(screen === "drafting" || screen === "waiting") && (
             <div className="card p-6">
-              <div className="flex items-center justify-between gap-3 mb-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                 <h3 className="font-semibold text-lg">Drafting Phase</h3>
-                <span className="pill bg-emerald-100 text-emerald-800">
-                  {draftStatus.submittedCount}/{draftStatus.requiredCount} selected
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className={`pill ${draftSecondsLeft <= 10 ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-700"}`}>
+                    {draftSecondsLeft}s left
+                  </span>
+                  <span className="pill bg-emerald-100 text-emerald-800">
+                    {draftStatus.submittedCount}/{draftStatus.requiredCount} selected
+                  </span>
+                </div>
               </div>
               {draft ? (
                 <>
                   <p className="text-sm text-slate-700 mb-4">
-                    You are selecting: <span className="font-bold text-[#143524]">{draft.attributeLabel}</span>
+                    You are selecting: <span className="font-bold text-[#143524]">{draft.attributeLabel || draft.attribute || "..."}</span>
                   </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {(draft.options || []).map((opt) => {
-                      const selected = draft.selected === opt;
-                      return (
-                        <button
-                          key={opt}
-                          onClick={() => selectOption(opt)}
-                          disabled={!!draft.selected}
-                          className={`text-left rounded-xl border px-4 py-3 font-medium transition ${
-                            selected
-                              ? "bg-emerald-600 text-white border-emerald-600"
-                              : "bg-white hover:bg-emerald-50 border-emerald-200 text-slate-800"
-                          } ${draft.selected && !selected ? "opacity-60" : ""}`}
-                        >
-                          {opt}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {(draft.options || []).length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {(draft.options || []).map((opt) => {
+                        const selected = draft.selected === opt;
+                        return (
+                          <button
+                            key={opt}
+                            onClick={() => selectOption(opt)}
+                            disabled={!!draft.selected}
+                            className={`text-left rounded-xl border px-4 py-3 font-medium transition ${
+                              selected
+                                ? "bg-emerald-600 text-white border-emerald-600"
+                                : "bg-white hover:bg-emerald-50 border-emerald-200 text-slate-800"
+                            } ${draft.selected && !selected ? "opacity-60" : ""}`}
+                          >
+                            {opt}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-slate-600">No draft options available yet.</p>
+                      <p className="text-xs text-slate-500">
+                        Restart <code>python run.py</code> so the backend picks up the latest fixes, then hard-refresh and click Retry.
+                      </p>
+                      <button
+                        className="btn btn-ghost text-sm"
+                        onClick={() =>
+                          send({
+                            type: "rejoin_room",
+                            code: session?.code || roomCode,
+                            playerId: session?.playerId || playerId,
+                          })
+                        }
+                      >
+                        Retry / Sync
+                      </button>
+                    </div>
+                  )}
                   {draft.selected && (
                     <div className="mt-5 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
                       <p className="font-semibold">Waiting for others...</p>
                       <p className="text-sm mt-1">
-                        You selected <span className="font-bold">{draft.selected}</span>. The 3 attributes will be revealed once everyone has chosen.
+                        You selected <span className="font-bold">{draft.selected}</span>. The 3 attributes will be revealed once everyone has chosen or when the draft timer ends ({draftSecondsLeft}s left).
                       </p>
                     </div>
                   )}
@@ -512,16 +585,35 @@ export default function App() {
               {!guessInfo.submitted ? (
                 <div className="space-y-3">
                   <label className="block text-sm font-medium">Name a real-life football player matching all 3 (as best as you can)</label>
-                  <input
-                    className="input"
-                    value={guess}
-                    onChange={(e) => setGuess(e.target.value)}
-                    placeholder="e.g. Cristiano Ronaldo"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") submitGuess();
-                    }}
-                  />
-                  <button className="btn btn-primary" onClick={submitGuess}>Submit Guess</button>
+                  <div className="relative">
+                    <input
+                      className="input"
+                      value={guess}
+                      onChange={handleGuessChange}
+                      placeholder="e.g. Cristiano Ronaldo"
+                      autoComplete="off"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") submitGuess();
+                      }}
+                    />
+                    {suggestions.length > 0 && (
+                      <div className="absolute z-20 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg max-h-60 overflow-auto">
+                        {suggestions.map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => pickSuggestion(s)}
+                            className="w-full text-left px-4 py-2 hover:bg-emerald-50 text-slate-800"
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500">Type to see suggestions (click a suggestion to submit it). This helps avoid typos or unknown players.</p>
+                  <button className="btn btn-primary" onClick={() => submitGuess()}>Submit Guess</button>
                 </div>
               ) : (
                 <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900">
@@ -623,7 +715,7 @@ export default function App() {
             </ul>
             {screen === "waiting" && draft?.selected && (
               <div className="mt-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                Waiting for others... ({draftStatus.submittedCount}/{draftStatus.requiredCount} submitted)
+                Waiting for others... ({draftStatus.submittedCount}/{draftStatus.requiredCount} submitted, {draftSecondsLeft}s left)
               </div>
             )}
           </div>

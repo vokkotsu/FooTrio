@@ -30,6 +30,8 @@ class Room:
 
         self.guess_deadline = None
         self.guess_task = None
+        self.draft_deadline = None
+        self.draft_task = None
         self.lock = asyncio.Lock()
 
     # --- player management ---
@@ -122,12 +124,14 @@ class Room:
         if len(self.players) != config.ROOM_SIZE:
             return False
         self.cancel_guess_timer()
+        self.cancel_draft_timer()
         self.state = "drafting"
         self.round_number += 1
         self.selections = {}
         self.guesses = {}
         self.round_result = None
         self.guess_deadline = None
+        self.draft_deadline = time.monotonic() + config.DRAFT_COUNTDOWN
 
         pids = self._ordered_pids()
         attrs = config.ATTRIBUTE_ORDER
@@ -174,6 +178,22 @@ class Room:
         self.selections[pid] = value
         return True, None
 
+    def auto_select_missing(self):
+        changed = False
+        for pid in self._ordered_pids():
+            if pid in self.selections:
+                continue
+            options = self.draft_options.get(pid) or []
+            if not options:
+                attr = self.assignments.get(pid)
+                if attr:
+                    options = sample_options(attr, config.DRAFT_OPTIONS)
+                    self.draft_options[pid] = options
+            if options:
+                self.selections[pid] = random.choice(options)
+                changed = True
+        return changed
+
     def all_selected(self):
         return len(self.selections) == config.ROOM_SIZE and self.all_players_connected()
 
@@ -188,6 +208,7 @@ class Room:
     def start_guessing(self):
         if self.state != "drafting":
             return False
+        self.cancel_draft_timer()
         self.state = "guessing"
         self.guesses = {}
         self.guess_deadline = time.monotonic() + config.GUESS_COUNTDOWN
@@ -295,10 +316,22 @@ class Room:
         if task and not task.done():
             task.cancel()
 
+    def cancel_draft_timer(self):
+        task = self.draft_task
+        self.draft_task = None
+        self.draft_deadline = None
+        if task and not task.done():
+            task.cancel()
+
     def guess_seconds_left(self):
         if self.guess_deadline is None:
             return None
         return max(0, int(round(self.guess_deadline - time.monotonic())))
+
+    def draft_seconds_left(self):
+        if self.draft_deadline is None:
+            return None
+        return max(0, int(round(self.draft_deadline - time.monotonic())))
 
     def state_snapshot(self, pid):
         snapshot = {
@@ -315,13 +348,18 @@ class Room:
         }
         if self.state == "drafting":
             attr = self.assignments.get(pid)
+            options = self.draft_options.get(pid, [])
+            if attr and not options:
+                options = sample_options(attr, config.DRAFT_OPTIONS)
+                self.draft_options[pid] = options
             snapshot["draft"] = {
                 "attribute": attr,
                 "attributeLabel": config.ATTRIBUTE_LABELS.get(attr, attr),
-                "options": self.draft_options.get(pid, []),
+                "options": options,
                 "selected": self.selections.get(pid),
                 "submittedCount": len(self.selections),
                 "requiredCount": config.ROOM_SIZE,
+                "secondsLeft": self.draft_seconds_left() or 0,
             }
         elif self.state == "guessing":
             snapshot["constraints"] = self.current_constraints()

@@ -22,7 +22,12 @@ def get_options():
 
 def sample_options(attribute, k=5):
     options = get_options()
-    pool = options.get(attribute, [])
+    key_map = {
+        "country": "countries",
+        "position": "positions",
+        "club": "clubs",
+    }
+    pool = options.get(key_map.get(attribute, attribute), [])
     if len(pool) <= k:
         return list(pool)
     return random.sample(pool, k)
@@ -71,3 +76,37 @@ def best_guess_for_constraints(constraints: dict, rng: random.Random | None = No
     if best_name:
         return best_name
     return rng.choice(players).get("name", "Unknown Player") if players else "Unknown Player"
+
+
+@lru_cache(maxsize=1)
+def _player_name_pairs():
+    # list of (display_name, normalized_name) for suggestion search
+    return [(p.get("name", ""), normalize_name(p.get("name", ""))) for p in get_players() if p.get("name")]
+
+
+def search_player_names(query: str, limit: int = 8):
+    q = normalize_name(query)
+    if not q:
+        return []
+    pairs = _player_name_pairs()
+    starts = []
+    contains = []
+    seen = set()
+    for name, norm in pairs:
+        if not norm or norm in seen:
+            continue
+        if norm.startswith(q):
+            seen.add(norm)
+            starts.append(name)
+            if len(starts) >= limit:
+                return starts[:limit]
+        elif q in norm:
+            contains.append((name, norm))
+    for name, norm in contains:
+        if norm in seen:
+            continue
+        seen.add(norm)
+        starts.append(name)
+        if len(starts) >= limit:
+            break
+    return starts[:limit]
