@@ -212,7 +212,23 @@ class Room:
         left = self.draft_refreshes_left.get(pid, 0)
         if left <= 0:
             return False, "No refreshes left", None, 0
+
+        current = set(self.draft_options.get(pid) or [])
         options = sample_options(attr, config.DRAFT_OPTIONS)
+        # try to provide a completely new set of options when possible (bias preserved by sample_options)
+        best_options = options
+        best_overlap = len(set(options) & current)
+        if best_overlap > 0 and current:
+            for _ in range(25):
+                candidate = sample_options(attr, config.DRAFT_OPTIONS)
+                overlap = len(set(candidate) & current)
+                if overlap < best_overlap:
+                    best_options = candidate
+                    best_overlap = overlap
+                if best_overlap == 0:
+                    break
+        options = best_options
+
         self.draft_options[pid] = options
         self.draft_refreshes_left[pid] = left - 1
         return True, None, options, self.draft_refreshes_left[pid]

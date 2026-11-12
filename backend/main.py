@@ -366,7 +366,7 @@ async def websocket_endpoint(ws: WebSocket):
                             "attributeLabel": config.ATTRIBUTE_LABELS.get(attr, attr),
                             "options": options,
                             "selected": room.selections.get(player_id),
-                            "secondsLeft": room.draft_seconds_left() or 0,
+                            "secondsLeft": room.draft_seconds_left() if room.draft_seconds_left() is not None else 0,
                             "refreshesLeft": refreshes_left,
                         },
                     )
