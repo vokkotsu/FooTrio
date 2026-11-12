@@ -122,6 +122,15 @@ _CLUB_ALIAS_CANON = {
     "sporting cp": "sporting",
     "sporting clube de portugal": "sporting",
     "sporting lisbon": "sporting",
+    "borussia dortmund": "borussia dortmund",
+    "bor dortmund": "borussia dortmund",
+    "dortmund": "borussia dortmund",
+    "bvb": "borussia dortmund",
+    "ballspielverein borussia 09 dortmund": "borussia dortmund",
+    "borussia monchengladbach": "borussia monchengladbach",
+    "bor monchengladbach": "borussia monchengladbach",
+    "borussia m gladbach": "borussia monchengladbach",
+    "gladbach": "borussia monchengladbach",
 }
 
 
