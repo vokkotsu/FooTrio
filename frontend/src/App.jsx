@@ -739,10 +739,19 @@ export default function App() {
 
               {screen === "game_over" && (
                 <div className="mt-5 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 dark:bg-amber-900/30 dark:border-amber-700 dark:text-amber-100">
-                  <p className="font-bold text-lg">
-                    Winner: {players.find((p) => p.id === (gameOver?.winnerId || result.winnerId))?.name || "Unknown"}
-                  </p>
-                  <p className="text-sm mt-1">First to reach 15 points wins.</p>
+                  {(gameOver?.draw || result.draw) ? (
+                    <>
+                      <p className="font-bold text-lg">Draw!</p>
+                      <p className="text-sm mt-1">All players reached 15 points in the same round.</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-bold text-lg">
+                        Winner: {players.find((p) => p.id === (gameOver?.winnerId || result.winnerId))?.name || "Unknown"}
+                      </p>
+                      <p className="text-sm mt-1">First to reach 15 points wins.</p>
+                    </>
+                  )}
                   <button className="btn btn-secondary mt-3" onClick={leaveToHome}>Back to Home</button>
                 </div>
               )}

@@ -343,14 +343,20 @@ class Room:
                 "totalScore": self.scores[pid],
             }
 
-        # winner check
+        # winner / draw check
         winner_id = None
+        draw = False
         max_score = max(self.scores.values()) if self.scores else 0
         if max_score >= config.WIN_SCORE:
-            # highest score wins; if tie at/above threshold choose by who reached higher total first? deterministic: lowest pid string
-            candidates = [pid for pid, sc in self.scores.items() if sc == max_score and sc >= config.WIN_SCORE]
-            candidates.sort(key=lambda p: self.players.get(p, ""))
-            winner_id = candidates[0] if candidates else None
+            reached = [pid for pid, sc in self.scores.items() if sc >= config.WIN_SCORE]
+            if self.scores and all(sc >= config.WIN_SCORE for sc in self.scores.values()):
+                draw = True
+                winner_id = None
+            else:
+                # highest score wins; if tie among those at/above threshold, pick deterministically
+                candidates = [pid for pid, sc in self.scores.items() if sc == max_score and sc >= config.WIN_SCORE]
+                candidates.sort(key=lambda p: (self.players.get(p, ""), pid))
+                winner_id = candidates[0] if candidates else None
 
         self.round_result = {
             "round": self.round_number,
@@ -359,10 +365,11 @@ class Room:
             "results": [per_player[pid] for pid in self._ordered_pids() if pid in per_player],
             "standings": self.player_list(),
             "winnerId": winner_id,
-            "gameOver": winner_id is not None,
+            "draw": draw,
+            "gameOver": winner_id is not None or draw,
         }
         self.history.append(self.round_result)
-        if winner_id:
+        if winner_id or draw:
             self.state = "game_over"
             self.winner_id = winner_id
         else:

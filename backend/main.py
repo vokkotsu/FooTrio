@@ -183,6 +183,7 @@ async def finalize_and_broadcast(room):
                 "type": "game_over",
                 "winnerId": result.get("winnerId"),
                 "winnerName": winner["name"] if winner else None,
+                "draw": bool(result.get("draw")),
                 "players": room.player_list(),
                 "history": room.history,
             }
