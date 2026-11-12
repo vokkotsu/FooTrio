@@ -372,7 +372,6 @@ export default function App() {
   const pickSuggestion = (name) => {
     setGuess(name);
     setSuggestions([]);
-    submitGuess(name);
   };
 
   const leaveToHome = () => {
