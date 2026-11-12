@@ -349,7 +349,7 @@ class Room:
         max_score = max(self.scores.values()) if self.scores else 0
         if max_score >= config.WIN_SCORE:
             reached = [pid for pid, sc in self.scores.items() if sc >= config.WIN_SCORE]
-            if self.scores and all(sc >= config.WIN_SCORE for sc in self.scores.values()):
+            if len(reached) >= 2:
                 draw = True
                 winner_id = None
             else:

@@ -742,7 +742,7 @@ export default function App() {
                   {(gameOver?.draw || result.draw) ? (
                     <>
                       <p className="font-bold text-lg">Draw!</p>
-                      <p className="text-sm mt-1">All players reached 15 points in the same round.</p>
+                      <p className="text-sm mt-1">Two or more players reached 15 points in the same round.</p>
                     </>
                   ) : (
                     <>
