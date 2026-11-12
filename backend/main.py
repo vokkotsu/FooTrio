@@ -68,6 +68,9 @@ async def start_round(room):
         }
     )
     await send_draft_prompts(room)
+    # if bots already satisfied all selections (e.g. no humans), advance
+    if room.all_selected():
+        await begin_guessing(room)
 
 
 def schedule_guess_timeout(room):
@@ -233,6 +236,20 @@ async def websocket_endpoint(ws: WebSocket):
                 async with room.lock:
                     if room.state == "lobby" and room.all_players_connected():
                         await start_round(room)
+                        # ensure this player has current draft prompt if drafting
+                        if room.state == "drafting" and player_id in room.assignments and not room.is_bot(player_id):
+                            attr = room.assignments[player_id]
+                            await room.send_to(
+                                player_id,
+                                {
+                                    "type": "draft_prompt",
+                                    "round": room.round_number,
+                                    "attribute": attr,
+                                    "attributeLabel": config.ATTRIBUTE_LABELS.get(attr, attr),
+                                    "options": room.draft_options.get(player_id, []),
+                                    "selected": room.selections.get(player_id),
+                                },
+                            )
 
         while True:
             raw = await ws.receive_text()

@@ -80,7 +80,7 @@ export default function App() {
         }
         case "round_started": {
           setRound(msg.round || 1);
-          setPlayers(msg.players || players);
+          setPlayers(msg.players || []);
           setGameOver(null);
           resetRoundUi();
           setScreen("drafting"); // may switch to waiting after draft prompt/select
