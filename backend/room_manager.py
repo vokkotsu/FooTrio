@@ -89,9 +89,11 @@ class Room:
             for pid in ordered
         ]
 
-    async def broadcast(self, msg):
+    async def broadcast(self, msg, exclude_pid=None):
         dead = []
         for pid, ws in list(self.player_ws.items()):
+            if exclude_pid is not None and pid == exclude_pid:
+                continue
             try:
                 await ws.send_json(msg)
             except Exception:

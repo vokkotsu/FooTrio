@@ -10,6 +10,7 @@ const SESSION_KEY = "ft-session";
 
 export default function App() {
   const wsRef = useRef(null);
+  const handleMessageRef = useRef(null);
   const reconnectTimer = useRef(null);
 
   const [screen, setScreen] = useState("landing"); // landing | lobby | drafting | waiting | guessing | result | game_over
@@ -256,6 +257,10 @@ export default function App() {
     [name, players, resetRoundUi, round, screen, session?.name]
   );
 
+  useEffect(() => {
+    handleMessageRef.current = handleMessage;
+  }, [handleMessage]);
+
   const connect = useCallback(
     (onOpen) => {
       if (!WS_URL) {
@@ -278,7 +283,7 @@ export default function App() {
         ws.onmessage = (ev) => {
           try {
             const msg = JSON.parse(ev.data);
-            handleMessage(msg);
+            (handleMessageRef.current || handleMessage)(msg);
           } catch {
             // ignore
           }

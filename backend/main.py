@@ -281,7 +281,25 @@ async def websocket_endpoint(ws: WebSocket):
                     "roomSize": config.ROOM_SIZE,
                 }
             )
-            await broadcast_lobby(room)
+            # broadcast lobby state to others, then send a fresh lobby_update to the
+            # joining socket too (in case the "joined" message was missed client-side)
+            await room.broadcast(
+                {
+                    "type": "lobby_update",
+                    "players": room.player_list(),
+                    "hostId": room.host_id,
+                    "roomSize": config.ROOM_SIZE,
+                },
+                exclude_pid=player_id,
+            )
+            await ws.send_json(
+                {
+                    "type": "lobby_update",
+                    "players": room.player_list(),
+                    "hostId": room.host_id,
+                    "roomSize": config.ROOM_SIZE,
+                }
+            )
             # auto-start when 3 players present
             if room.state == "lobby" and room.all_players_connected():
                 async with room.lock:
