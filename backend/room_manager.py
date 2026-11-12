@@ -23,6 +23,7 @@ class Room:
         self.assignment_offset = 0
         self.assignments = {}  # pid -> attribute
         self.draft_options = {}  # pid -> [options]
+        self.draft_refreshes_left = {}  # pid -> int
         self.selections = {}  # pid -> chosen value
         self.guesses = {}  # pid -> {"text": str, "submitted_at": float}
         self.round_result = None
@@ -137,10 +138,12 @@ class Room:
         attrs = config.ATTRIBUTE_ORDER
         self.assignments = {}
         self.draft_options = {}
+        self.draft_refreshes_left = {}
         for i, pid in enumerate(pids):
             attr = attrs[(i + self.assignment_offset) % len(attrs)]
             self.assignments[pid] = attr
             self.draft_options[pid] = sample_options(attr, config.DRAFT_OPTIONS)
+            self.draft_refreshes_left[pid] = 3 if attr in ("country", "club") else 0
 
         # auto-select for bots
         self._auto_select_bots()
@@ -195,6 +198,24 @@ class Room:
             return False, "Invalid selection"
         self.selections[pid] = value
         return True, None
+
+    def refresh_draft_options(self, pid):
+        if self.state != "drafting":
+            return False, "Not in drafting phase", None, 0
+        if pid not in self.assignments:
+            return False, "Not in this round", None, 0
+        if pid in self.selections:
+            return False, "Already selected", None, 0
+        attr = self.assignments.get(pid)
+        if attr not in ("country", "club"):
+            return False, "Refresh not available for this attribute", None, 0
+        left = self.draft_refreshes_left.get(pid, 0)
+        if left <= 0:
+            return False, "No refreshes left", None, 0
+        options = sample_options(attr, config.DRAFT_OPTIONS)
+        self.draft_options[pid] = options
+        self.draft_refreshes_left[pid] = left - 1
+        return True, None, options, self.draft_refreshes_left[pid]
 
     def auto_select_missing(self):
         changed = False
@@ -384,6 +405,7 @@ class Room:
                 "submittedCount": len(self.selections),
                 "requiredCount": config.ROOM_SIZE,
                 "secondsLeft": self.draft_seconds_left() or 0,
+                "refreshesLeft": self.draft_refreshes_left.get(pid, 0),
             }
         elif self.state == "guessing":
             snapshot["constraints"] = self.current_constraints()

@@ -50,6 +50,7 @@ async def send_draft_prompts(room):
                 "options": options,
                 "selected": room.selections.get(pid),
                 "secondsLeft": room.draft_seconds_left() or config.DRAFT_COUNTDOWN,
+                "refreshesLeft": room.draft_refreshes_left.get(pid, 0),
             },
         )
     await room.broadcast(
@@ -346,6 +347,29 @@ async def websocket_endpoint(ws: WebSocket):
                         q = (data.get("query") or "").strip()
                         suggestions = search_player_names(q, 8) if q else []
                         await ws.send_json({"type": "player_suggestions", "query": data.get("query") or "", "suggestions": suggestions})
+
+                elif t == "refresh_draft":
+                    if room.state != "drafting":
+                        await ws.send_json({"type": "error", "message": "Not in drafting phase"})
+                        continue
+                    ok, err, options, refreshes_left = room.refresh_draft_options(player_id)
+                    if not ok:
+                        await ws.send_json({"type": "error", "message": err or "Could not refresh options"})
+                        continue
+                    attr = room.assignments.get(player_id)
+                    await room.send_to(
+                        player_id,
+                        {
+                            "type": "draft_prompt",
+                            "round": room.round_number,
+                            "attribute": attr,
+                            "attributeLabel": config.ATTRIBUTE_LABELS.get(attr, attr),
+                            "options": options,
+                            "selected": room.selections.get(player_id),
+                            "secondsLeft": room.draft_seconds_left() or 0,
+                            "refreshesLeft": refreshes_left,
+                        },
+                    )
 
                 elif t == "leave":
                     explicit_leave = True

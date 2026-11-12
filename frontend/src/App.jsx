@@ -98,6 +98,7 @@ export default function App() {
             attributeLabel: msg.attributeLabel,
             options: msg.options || [],
             selected: msg.selected || null,
+            refreshesLeft: msg.refreshesLeft ?? 0,
           });
           setDraftSecondsLeft(secs);
           setDraftStatus((s) => ({ ...s, secondsLeft: secs }));
@@ -182,6 +183,7 @@ export default function App() {
               attributeLabel: d.attributeLabel,
               options: d.options || [],
               selected: d.selected || null,
+              refreshesLeft: d.refreshesLeft ?? 0,
             });
             setDraftStatus({
               submittedCount: d.submittedCount ?? 0,
@@ -346,6 +348,12 @@ export default function App() {
     send({ type: "select_option", value });
   };
 
+  const refreshDraft = () => {
+    if (!draft || draft.selected) return;
+    if ((draft.refreshesLeft ?? 0) <= 0) return;
+    send({ type: "refresh_draft" });
+  };
+
   const submitGuess = (value) => {
     const text = (value ?? guess).trim();
     if (!text) {
@@ -494,25 +502,39 @@ export default function App() {
                     You are selecting: <span className="font-bold text-[#143524]">{draft.attributeLabel || draft.attribute || "..."}</span>
                   </p>
                   {(draft.options || []).length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {(draft.options || []).map((opt) => {
-                        const selected = draft.selected === opt;
-                        return (
+                    <>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {(draft.options || []).map((opt) => {
+                          const selected = draft.selected === opt;
+                          return (
+                            <button
+                              key={opt}
+                              onClick={() => selectOption(opt)}
+                              disabled={!!draft.selected}
+                              className={`text-left rounded-xl border px-4 py-3 font-medium transition ${
+                                selected
+                                  ? "bg-emerald-600 text-white border-emerald-600"
+                                  : "bg-white hover:bg-emerald-50 border-emerald-200 text-slate-800"
+                              } ${draft.selected && !selected ? "opacity-60" : ""}`}
+                            >
+                              {opt}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {(draft.attribute === "country" || draft.attribute === "club") && !draft.selected && (
+                        <div className="mt-4 flex items-center gap-3">
                           <button
-                            key={opt}
-                            onClick={() => selectOption(opt)}
-                            disabled={!!draft.selected}
-                            className={`text-left rounded-xl border px-4 py-3 font-medium transition ${
-                              selected
-                                ? "bg-emerald-600 text-white border-emerald-600"
-                                : "bg-white hover:bg-emerald-50 border-emerald-200 text-slate-800"
-                            } ${draft.selected && !selected ? "opacity-60" : ""}`}
+                            className="btn btn-ghost text-sm"
+                            onClick={refreshDraft}
+                            disabled={(draft.refreshesLeft ?? 0) <= 0}
                           >
-                            {opt}
+                            Refresh picks ({draft.refreshesLeft ?? 0} left)
                           </button>
-                        );
-                      })}
-                    </div>
+                          <span className="text-xs text-slate-500">Get a new set of 5 options (keeps 3/5 bias).</span>
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <div className="space-y-3">
                       <p className="text-slate-600">No draft options available yet.</p>
