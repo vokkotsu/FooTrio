@@ -393,7 +393,8 @@ export default function App() {
     send({ type: "search_players", query: q });
   };
 
-  const pickSuggestion = (name) => {
+  const pickSuggestion = (item) => {
+    const name = typeof item === "string" ? item : item?.name || "";
     setGuess(name);
     setSuggestions([]);
   };
@@ -648,18 +649,23 @@ export default function App() {
                       }}
                     />
                     {suggestions.length > 0 && (
-                      <div className="absolute z-20 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg max-h-60 overflow-auto">
-                        {suggestions.map((s) => (
-                          <button
-                            key={s}
-                            type="button"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => pickSuggestion(s)}
-                            className="w-full text-left px-4 py-2 hover:bg-emerald-50 text-slate-800"
-                          >
-                            {s}
-                          </button>
-                        ))}
+                      <div className="absolute z-20 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg max-h-60 overflow-auto dark:border-slate-600 dark:bg-slate-800">
+                        {suggestions.map((s) => {
+                          const name = typeof s === "string" ? s : s?.name || "";
+                          const pos = typeof s === "object" && s ? s.position : "";
+                          return (
+                            <button
+                              key={`${name}-${pos}`}
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => pickSuggestion(s)}
+                              className="w-full text-left px-4 py-2 hover:bg-emerald-50 text-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+                            >
+                              <span className="font-medium">{name}</span>
+                              {pos ? <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">({pos})</span> : null}
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

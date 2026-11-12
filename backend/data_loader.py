@@ -124,8 +124,12 @@ def best_guess_for_constraints(constraints: dict, rng: random.Random | None = No
 
 @lru_cache(maxsize=1)
 def _player_name_pairs():
-    # list of (display_name, normalized_name) for suggestion search
-    return [(p.get("name", ""), normalize_name(p.get("name", ""))) for p in get_players() if p.get("name")]
+    # list of (display_name, normalized_name, sub_position) for suggestion search
+    return [
+        (p.get("name", ""), normalize_name(p.get("name", "")), p.get("position", ""))
+        for p in get_players()
+        if p.get("name")
+    ]
 
 
 def search_player_names(query: str, limit: int = 8):
@@ -136,21 +140,22 @@ def search_player_names(query: str, limit: int = 8):
     starts = []
     contains = []
     seen = set()
-    for name, norm in pairs:
+    for name, norm, position in pairs:
         if not norm or norm in seen:
             continue
+        item = {"name": name, "position": position}
         if norm.startswith(q):
             seen.add(norm)
-            starts.append(name)
+            starts.append(item)
             if len(starts) >= limit:
                 return starts[:limit]
         elif q in norm:
-            contains.append((name, norm))
-    for name, norm in contains:
+            contains.append((norm, item))
+    for norm, item in contains:
         if norm in seen:
             continue
         seen.add(norm)
-        starts.append(name)
+        starts.append(item)
         if len(starts) >= limit:
             break
     return starts[:limit]
