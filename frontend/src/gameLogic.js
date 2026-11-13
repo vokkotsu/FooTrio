@@ -1,6 +1,7 @@
 import gameData from "./game_data.json";
 
 export const ROOM_SIZE = 3;
+export const DUO_ROOM_SIZE = 2;
 export const WIN_SCORE = 15;
 export const DRAFT_OPTIONS = 5;
 export const GUESS_COUNTDOWN = 60;
@@ -237,13 +238,24 @@ function pickBotOption(attr, options) {
 }
 
 export class FooTrioGame {
-  constructor(humanName) {
-    this.players = [
-      { id: "p1", name: humanName || "Player", isBot: false, isHost: true },
-      { id: "b1", name: "Bot 1", isBot: true, isHost: false },
-      { id: "b2", name: "Bot 2", isBot: true, isHost: false },
-    ];
-    this.scores = { p1: 0, b1: 0, b2: 0 };
+  constructor(humanName, mode = "single") {
+    this.mode = mode; // "single" (1v2 bots) or "duo" (1v1 bot)
+    if (mode === "duo") {
+      this.players = [
+        { id: "p1", name: humanName || "Player", isBot: false, isHost: true },
+        { id: "b1", name: "Bot 1", isBot: true, isHost: false },
+      ];
+      this.scores = { p1: 0, b1: 0 };
+      this.roomSize = DUO_ROOM_SIZE;
+    } else {
+      this.players = [
+        { id: "p1", name: humanName || "Player", isBot: false, isHost: true },
+        { id: "b1", name: "Bot 1", isBot: true, isHost: false },
+        { id: "b2", name: "Bot 2", isBot: true, isHost: false },
+      ];
+      this.scores = { p1: 0, b1: 0, b2: 0 };
+      this.roomSize = ROOM_SIZE;
+    }
     this.state = "lobby";
     this.roundNumber = 0;
     this.assignmentOffset = 0;
@@ -256,10 +268,15 @@ export class FooTrioGame {
     this.draftOptions = {};
     this.draftRefreshesLeft = {};
     this.selections = {};
+    this.systemSelections = {};
     this.guesses = {};
     this.roundResult = null;
     this.draftDeadline = null;
     this.guessDeadline = null;
+  }
+
+  requiredSelections() {
+    return Object.keys(this.assignments).length;
   }
 
   playerList() {
@@ -281,7 +298,7 @@ export class FooTrioGame {
     this.roundNumber = 0;
     this.assignmentOffset = 0;
     this.history = [];
-    this.scores = { p1: 0, b1: 0, b2: 0 };
+    this.scores = this.mode === "duo" ? { p1: 0, b1: 0 } : { p1: 0, b1: 0, b2: 0 };
     this.resetRoundState();
     return this.startRound();
   }
@@ -291,13 +308,30 @@ export class FooTrioGame {
     this.roundNumber += 1;
     this.resetRoundState();
     this.draftDeadline = Date.now() + DRAFT_COUNTDOWN * 1000;
-    const attrs = ATTRIBUTE_ORDER;
-    this._orderedPids().forEach((pid, i) => {
-      const attr = attrs[(i + this.assignmentOffset) % attrs.length];
-      this.assignments[pid] = attr;
-      this.draftOptions[pid] = sampleOptions(attr, DRAFT_OPTIONS);
-      this.draftRefreshesLeft[pid] = attr === "country" || attr === "position" || attr === "club" ? 3 : 0;
-    });
+    const attrs = [...ATTRIBUTE_ORDER];
+    const pids = this._orderedPids();
+    if (this.mode === "duo") {
+      pids.forEach((pid, i) => {
+        const attr = attrs[(i + this.assignmentOffset) % attrs.length];
+        this.assignments[pid] = attr;
+        this.draftOptions[pid] = sampleOptions(attr, DRAFT_OPTIONS);
+        this.draftRefreshesLeft[pid] = attr === "country" || attr === "position" || attr === "club" ? 3 : 0;
+      });
+      const assigned = new Set(Object.values(this.assignments));
+      let missing = attrs.filter((a) => !assigned.has(a));
+      if (!missing.length) missing = [attrs[(this.assignmentOffset + 2) % attrs.length]];
+      for (const attr of missing) {
+        const opts = sampleOptions(attr, DRAFT_OPTIONS);
+        this.systemSelections[attr] = pickBotOption(attr, opts);
+      }
+    } else {
+      pids.forEach((pid, i) => {
+        const attr = attrs[(i + this.assignmentOffset) % attrs.length];
+        this.assignments[pid] = attr;
+        this.draftOptions[pid] = sampleOptions(attr, DRAFT_OPTIONS);
+        this.draftRefreshesLeft[pid] = attr === "country" || attr === "position" || attr === "club" ? 3 : 0;
+      });
+    }
     this._autoSelectBots();
     return true;
   }
@@ -371,7 +405,7 @@ export class FooTrioGame {
   }
 
   currentConstraints() {
-    const out = {};
+    const out = { ...(this.systemSelections || {}) };
     for (const [pid, attr] of Object.entries(this.assignments)) {
       if (this.selections[pid] != null) out[attr] = this.selections[pid];
     }
@@ -481,12 +515,17 @@ export class FooTrioGame {
       gameOver = true;
     }
 
+    const assignmentsOut = Object.fromEntries(
+      Object.entries(this.assignments).map(([pid, attr]) => [pid, { attribute: attr, value: this.selections[pid] }])
+    );
+    for (const [attr, value] of Object.entries(this.systemSelections || {})) {
+      assignmentsOut[`system:${attr}`] = { attribute: attr, value, system: true };
+    }
+
     this.roundResult = {
       round: this.roundNumber,
       constraints,
-      assignments: Object.fromEntries(
-        Object.entries(this.assignments).map(([pid, attr]) => [pid, { attribute: attr, value: this.selections[pid] }])
-      ),
+      assignments: assignmentsOut,
       results: this._orderedPids().map((pid) => perPlayer[pid]).filter(Boolean),
       standings: this.playerList(),
       winnerId,

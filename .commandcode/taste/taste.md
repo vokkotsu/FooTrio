@@ -1,0 +1,3 @@
+- After every edit, commit and push the changes. Confidence: 1.0
+- Use English consistently in all programs (code, UI, messages, etc.), not Indonesian. Confidence: 1.0
+- Do not auto-open the browser when running `python app.py`; print the URL for the user to open manually instead. Confidence: 1.0

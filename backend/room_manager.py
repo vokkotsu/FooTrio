@@ -16,10 +16,11 @@ import config
 
 
 class Room:
-    def __init__(self, code, host_id, single_player=False):
+    def __init__(self, code, host_id, single_player=False, room_size=None):
         self.code = code
         self.host_id = host_id
         self.single_player = single_player
+        self.room_size = room_size or config.ROOM_SIZE
         self.players = {}  # pid -> name (humans and bots)
         self.player_ws = {}  # pid -> websocket (humans only)
         self.bot_ids = set()  # pids that are bots
@@ -33,6 +34,7 @@ class Room:
         self.draft_options = {}  # pid -> [options]
         self.draft_refreshes_left = {}  # pid -> int
         self.selections = {}  # pid -> chosen value
+        self.system_selections = {}  # attribute -> chosen value (auto-filled, e.g. duo mode)
         self.guesses = {}  # pid -> {"text": str, "submitted_at": float}
         self.round_result = None
         self.winner_id = None
@@ -45,7 +47,7 @@ class Room:
 
     # --- player management ---
     def add_player(self, pid, name, ws):
-        if len(self.players) >= config.ROOM_SIZE:
+        if len(self.players) >= self.room_size:
             return False
         self.players[pid] = name
         self.player_ws[pid] = ws
@@ -53,7 +55,7 @@ class Room:
         return True
 
     def add_bot(self, name):
-        if len(self.players) >= config.ROOM_SIZE:
+        if len(self.players) >= self.room_size:
             return None
         pid = f"bot-{len(self.bot_ids) + 1}"
         self.players[pid] = name
@@ -121,7 +123,7 @@ class Room:
     # --- helpers ---
     def all_players_connected(self):
         # humans+bots must fill the room
-        return len(self.players) == config.ROOM_SIZE
+        return len(self.players) == self.room_size
 
     def attribute_for(self, pid):
         return self.assignments.get(pid)
@@ -130,30 +132,51 @@ class Room:
         # stable order of join
         return list(self.players.keys())
 
+    def required_selections(self):
+        # number of player draft selections required this round
+        return len(self.assignments)
+
     # --- game flow ---
     def start_round(self):
-        if len(self.players) != config.ROOM_SIZE:
+        if len(self.players) != self.room_size:
             return False
         self.cancel_guess_timer()
         self.cancel_draft_timer()
         self.state = "drafting"
         self.round_number += 1
         self.selections = {}
+        self.system_selections = {}
         self.guesses = {}
         self.round_result = None
         self.guess_deadline = None
         self.draft_deadline = time.monotonic() + config.DRAFT_COUNTDOWN
 
         pids = self._ordered_pids()
-        attrs = config.ATTRIBUTE_ORDER
+        attrs = list(config.ATTRIBUTE_ORDER)
         self.assignments = {}
         self.draft_options = {}
         self.draft_refreshes_left = {}
-        for i, pid in enumerate(pids):
-            attr = attrs[(i + self.assignment_offset) % len(attrs)]
-            self.assignments[pid] = attr
-            self.draft_options[pid] = sample_options(attr, config.DRAFT_OPTIONS)
-            self.draft_refreshes_left[pid] = 3 if attr in ("country", "position", "club") else 0
+        if self.room_size == 2:
+            # duo mode: assign 2 rotating attributes to players, system picks the 3rd
+            for i, pid in enumerate(pids):
+                attr = attrs[(i + self.assignment_offset) % len(attrs)]
+                self.assignments[pid] = attr
+                self.draft_options[pid] = sample_options(attr, config.DRAFT_OPTIONS)
+                self.draft_refreshes_left[pid] = 3 if attr in ("country", "position", "club") else 0
+            assigned = set(self.assignments.values())
+            missing = [a for a in attrs if a not in assigned]
+            if not missing:
+                missing = [attrs[(self.assignment_offset + 2) % len(attrs)]]
+            for attr in missing:
+                opts = sample_options(attr, config.DRAFT_OPTIONS)
+                choice = self._pick_bot_option(attr, opts)
+                self.system_selections[attr] = choice
+        else:
+            for i, pid in enumerate(pids):
+                attr = attrs[(i + self.assignment_offset) % len(attrs)]
+                self.assignments[pid] = attr
+                self.draft_options[pid] = sample_options(attr, config.DRAFT_OPTIONS)
+                self.draft_refreshes_left[pid] = 3 if attr in ("country", "position", "club") else 0
 
         # auto-select for bots
         self._auto_select_bots()
@@ -278,11 +301,11 @@ class Room:
         return changed
 
     def all_selected(self):
-        return len(self.selections) == config.ROOM_SIZE and self.all_players_connected()
+        return len(self.selections) == self.required_selections() and self.all_players_connected()
 
     def current_constraints(self):
         # map attribute -> chosen value
-        out = {}
+        out = dict(self.system_selections)
         for pid, attr in self.assignments.items():
             if pid in self.selections:
                 out[attr] = self.selections[pid]
@@ -311,7 +334,7 @@ class Room:
         return True, None
 
     def all_guessed(self):
-        return len(self.guesses) == config.ROOM_SIZE and self.all_players_connected()
+        return len(self.guesses) == self.room_size and self.all_players_connected()
 
     def _score_guess(self, guess_text, constraints):
         matches = find_player_matches(guess_text)
@@ -385,10 +408,14 @@ class Room:
                 candidates.sort(key=lambda p: (self.players.get(p, ""), pid))
                 winner_id = candidates[0] if candidates else None
 
+        assignments_out = {pid: {"attribute": attr, "value": self.selections.get(pid)} for pid, attr in self.assignments.items()}
+        for attr, value in self.system_selections.items():
+            assignments_out[f"system:{attr}"] = {"attribute": attr, "value": value, "system": True}
+
         self.round_result = {
             "round": self.round_number,
             "constraints": constraints,
-            "assignments": {pid: {"attribute": attr, "value": self.selections.get(pid)} for pid, attr in self.assignments.items()},
+            "assignments": assignments_out,
             "results": [per_player[pid] for pid in self._ordered_pids() if pid in per_player],
             "standings": self.player_list(),
             "winnerId": winner_id,
@@ -440,6 +467,7 @@ class Room:
             "players": self.player_list(),
             "history": self.history,
             "winScore": config.WIN_SCORE,
+            "roomSize": self.room_size,
         }
         if self.state == "drafting":
             attr = self.assignments.get(pid)
@@ -453,7 +481,7 @@ class Room:
                 "options": options,
                 "selected": self.selections.get(pid),
                 "submittedCount": len(self.selections),
-                "requiredCount": config.ROOM_SIZE,
+                "requiredCount": self.required_selections(),
                 "secondsLeft": self.draft_seconds_left() or 0,
                 "refreshesLeft": self.draft_refreshes_left.get(pid, 0),
             }
@@ -462,7 +490,7 @@ class Room:
             snapshot["guess"] = {
                 "submitted": pid in self.guesses,
                 "submittedCount": len(self.guesses),
-                "requiredCount": config.ROOM_SIZE,
+                "requiredCount": self.room_size,
                 "secondsLeft": self.guess_seconds_left() or 0,
             }
         elif self.state in ("result", "game_over"):
@@ -477,11 +505,11 @@ class RoomManager:
     def _gen_code(self):
         return "".join(random.choices(string.ascii_uppercase + string.digits, k=5))
 
-    def create_room(self, host_id, single_player=False):
+    def create_room(self, host_id, single_player=False, room_size=None):
         code = self._gen_code()
         while code in self.rooms:
             code = self._gen_code()
-        self.rooms[code] = Room(code, host_id, single_player=single_player)
+        self.rooms[code] = Room(code, host_id, single_player=single_player, room_size=room_size)
         return code
 
     def get_room(self, code):

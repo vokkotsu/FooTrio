@@ -27,7 +27,7 @@ async def broadcast_lobby(room):
             "type": "lobby_update",
             "players": room.player_list(),
             "hostId": room.host_id,
-            "roomSize": config.ROOM_SIZE,
+            "roomSize": room.room_size,
         }
     )
 
@@ -58,7 +58,7 @@ async def send_draft_prompts(room):
             "type": "draft_status",
             "round": room.round_number,
             "submittedCount": len(room.selections),
-            "requiredCount": config.ROOM_SIZE,
+            "requiredCount": room.required_selections(),
             "secondsLeft": room.draft_seconds_left() or config.DRAFT_COUNTDOWN,
         }
     )
@@ -126,7 +126,7 @@ def schedule_draft_timeout(room):
                         "type": "draft_status",
                         "round": room.round_number,
                         "submittedCount": len(room.selections),
-                        "requiredCount": config.ROOM_SIZE,
+                        "requiredCount": room.required_selections(),
                         "secondsLeft": 0,
                     }
                 )
@@ -155,7 +155,7 @@ async def begin_guessing(room):
             "constraints": constraints,
             "secondsLeft": config.GUESS_COUNTDOWN,
             "submittedCount": len(room.guesses),
-            "requiredCount": config.ROOM_SIZE,
+            "requiredCount": room.room_size,
         }
     )
     await send_state_sync(room)
@@ -224,13 +224,17 @@ async def websocket_endpoint(ws: WebSocket):
         if msg_type == "create_room":
             name = (data.get("name") or "Player").strip() or "Player"
             mode = (data.get("mode") or "multi").strip().lower()
-            single_player = mode == "single"
-            code = manager.create_room(player_id, single_player=single_player)
+            # modes: single (1 human vs 2 bots), duo (1 human vs 1 bot), multi (3 humans)
+            single_player = mode in ("single", "duo")
+            room_size = config.DUO_ROOM_SIZE if mode == "duo" else config.ROOM_SIZE
+            code = manager.create_room(player_id, single_player=single_player, room_size=room_size)
             room = manager.get_room(code)
             room.add_player(player_id, name, ws)
-            if single_player:
+            if mode == "single":
                 room.add_bot("Bot 1")
                 room.add_bot("Bot 2")
+            elif mode == "duo":
+                room.add_bot("Bot 1")
         elif msg_type == "join_room":
             name = (data.get("name") or "Player").strip() or "Player"
             code = (data.get("code") or "").strip().upper()
@@ -247,7 +251,7 @@ async def websocket_endpoint(ws: WebSocket):
                 await ws.send_json({"type": "error", "message": "Game already in progress"})
                 await ws.close()
                 return
-            if len(room.players) >= config.ROOM_SIZE:
+            if len(room.players) >= room.room_size:
                 await ws.send_json({"type": "error", "message": "Room is full"})
                 await ws.close()
                 return
@@ -278,7 +282,7 @@ async def websocket_endpoint(ws: WebSocket):
                     "name": room.players.get(player_id),
                     "isHost": player_id == room.host_id,
                     "players": room.player_list(),
-                    "roomSize": config.ROOM_SIZE,
+                    "roomSize": room.room_size,
                 }
             )
             # broadcast lobby state to others, then send a fresh lobby_update to the
@@ -288,7 +292,7 @@ async def websocket_endpoint(ws: WebSocket):
                     "type": "lobby_update",
                     "players": room.player_list(),
                     "hostId": room.host_id,
-                    "roomSize": config.ROOM_SIZE,
+                    "roomSize": room.room_size,
                 },
                 exclude_pid=player_id,
             )
@@ -297,7 +301,7 @@ async def websocket_endpoint(ws: WebSocket):
                     "type": "lobby_update",
                     "players": room.player_list(),
                     "hostId": room.host_id,
-                    "roomSize": config.ROOM_SIZE,
+                    "roomSize": room.room_size,
                 }
             )
             # auto-start when 3 players present
@@ -334,7 +338,7 @@ async def websocket_endpoint(ws: WebSocket):
                             "type": "draft_status",
                             "round": room.round_number,
                             "submittedCount": len(room.selections),
-                            "requiredCount": config.ROOM_SIZE,
+                            "requiredCount": room.required_selections(),
                             "secondsLeft": room.draft_seconds_left() or 0,
                         }
                     )
@@ -353,7 +357,7 @@ async def websocket_endpoint(ws: WebSocket):
                         {
                             "type": "guess_update",
                             "submittedCount": len(room.guesses),
-                            "requiredCount": config.ROOM_SIZE,
+                            "requiredCount": room.room_size,
                         }
                     )
                     if room.all_guessed():

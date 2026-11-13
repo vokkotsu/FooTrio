@@ -5,6 +5,8 @@ import {
   DRAFT_COUNTDOWN,
   GUESS_COUNTDOWN,
   ATTRIBUTE_LABELS,
+  ROOM_SIZE,
+  DUO_ROOM_SIZE,
 } from "./gameLogic";
 
 const WS_URL =
@@ -26,6 +28,8 @@ export default function App() {
   const isSingleRef = useRef(false);
 
   const [isSingle, setIsSingle] = useState(false);
+  const [singleMode, setSingleMode] = useState("single"); // single (1v2) | duo (1v1)
+  const [roomSize, setRoomSize] = useState(ROOM_SIZE);
   const [screen, setScreen] = useState("landing"); // landing | lobby | drafting | waiting | guessing | result | game_over
   const [name, setName] = useState("");
   const [theme, setTheme] = useState(() => {
@@ -49,11 +53,11 @@ export default function App() {
   const [round, setRound] = useState(0);
 
   const [draft, setDraft] = useState(null); // {attribute, attributeLabel, options, selected}
-  const [draftStatus, setDraftStatus] = useState({ submittedCount: 0, requiredCount: 3, secondsLeft: 30 });
-  const [draftSecondsLeft, setDraftSecondsLeft] = useState(30);
+  const [draftStatus, setDraftStatus] = useState({ submittedCount: 0, requiredCount: ROOM_SIZE, secondsLeft: DRAFT_COUNTDOWN });
+  const [draftSecondsLeft, setDraftSecondsLeft] = useState(DRAFT_COUNTDOWN);
   const [constraints, setConstraints] = useState(null);
   const [guess, setGuess] = useState("");
-  const [guessInfo, setGuessInfo] = useState({ submitted: false, submittedCount: 0, requiredCount: 3, secondsLeft: 60 });
+  const [guessInfo, setGuessInfo] = useState({ submitted: false, submittedCount: 0, requiredCount: ROOM_SIZE, secondsLeft: GUESS_COUNTDOWN });
   const [suggestions, setSuggestions] = useState([]);
   const [result, setResult] = useState(null);
   const [gameOver, setGameOver] = useState(null);
@@ -84,16 +88,17 @@ export default function App() {
 
   const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
 
-  const resetRoundUi = useCallback(() => {
+  const resetRoundUi = useCallback((size = roomSize) => {
+    const draftReq = size === DUO_ROOM_SIZE ? DUO_ROOM_SIZE : ROOM_SIZE;
     setDraft(null);
-    setDraftStatus({ submittedCount: 0, requiredCount: 3, secondsLeft: 30 });
-    setDraftSecondsLeft(30);
+    setDraftStatus({ submittedCount: 0, requiredCount: draftReq, secondsLeft: DRAFT_COUNTDOWN });
+    setDraftSecondsLeft(DRAFT_COUNTDOWN);
     setConstraints(null);
     setGuess("");
-    setGuessInfo({ submitted: false, submittedCount: 0, requiredCount: 3, secondsLeft: 60 });
+    setGuessInfo({ submitted: false, submittedCount: 0, requiredCount: size, secondsLeft: GUESS_COUNTDOWN });
     setSuggestions([]);
     setResult(null);
-  }, []);
+  }, [roomSize]);
 
   const clearLocalTimers = useCallback(() => {
     if (localDraftTimerRef.current) clearInterval(localDraftTimerRef.current);
@@ -114,6 +119,8 @@ export default function App() {
     (msg) => {
       switch (msg.type) {
         case "joined": {
+          const size = msg.roomSize || ROOM_SIZE;
+          setRoomSize(size);
           setPlayerId(msg.playerId);
           setRoomCode(msg.code);
           setHostId(msg.players?.find((p) => p.isHost)?.id || null);
@@ -122,10 +129,11 @@ export default function App() {
           setStatus("");
           setError("");
           const single = !!(msg.players || []).some((p) => p.isBot);
-          setSession({ code: msg.code, playerId: msg.playerId, name: msg.name || name, singlePlayer: single });
+          setSession({ code: msg.code, playerId: msg.playerId, name: msg.name || name, singlePlayer: single, mode: size === DUO_ROOM_SIZE ? "duo" : "multi" });
           break;
         }
         case "lobby_update": {
+          if (msg.roomSize) setRoomSize(msg.roomSize);
           setPlayers(msg.players || []);
           setHostId(msg.hostId || null);
           if (screen === "landing") setScreen("lobby");
@@ -135,13 +143,13 @@ export default function App() {
           setRound(msg.round || 1);
           setPlayers(msg.players || []);
           setGameOver(null);
-          resetRoundUi();
+          resetRoundUi(roomSize);
           setScreen("drafting"); // may switch to waiting after draft prompt/select
           break;
         }
         case "draft_prompt": {
           setRound(msg.round || round);
-          const secs = msg.secondsLeft ?? 30;
+          const secs = msg.secondsLeft ?? DRAFT_COUNTDOWN;
           setDraft({
             attribute: msg.attribute,
             attributeLabel: msg.attributeLabel,
@@ -163,7 +171,7 @@ export default function App() {
           const secs = msg.secondsLeft;
           setDraftStatus({
             submittedCount: msg.submittedCount ?? 0,
-            requiredCount: msg.requiredCount ?? 3,
+            requiredCount: msg.requiredCount ?? draftStatus.requiredCount ?? (roomSize === DUO_ROOM_SIZE ? DUO_ROOM_SIZE : ROOM_SIZE),
             secondsLeft: secs ?? 0,
           });
           if (typeof secs === "number") setDraftSecondsLeft(secs);
@@ -175,8 +183,8 @@ export default function App() {
           setGuessInfo({
             submitted: false,
             submittedCount: msg.submittedCount ?? 0,
-            requiredCount: msg.requiredCount ?? 3,
-            secondsLeft: msg.secondsLeft ?? 60,
+            requiredCount: msg.requiredCount ?? roomSize,
+            secondsLeft: msg.secondsLeft ?? GUESS_COUNTDOWN,
           });
           setGuess("");
           setSuggestions([]);
@@ -219,6 +227,8 @@ export default function App() {
         }
         case "state_sync": {
           const pid = msg.playerId;
+          const size = msg.roomSize || roomSize || ROOM_SIZE;
+          setRoomSize(size);
           setPlayerId(pid);
           setRoomCode(msg.code);
           setHostId(msg.hostId || null);
@@ -227,14 +237,14 @@ export default function App() {
           const hist = msg.history || [];
           setHistory(hist);
           setHistoryPage((p) => (hist.length ? Math.min(p, hist.length - 1) : 0));
-          setSession({ code: msg.code, playerId: pid, name: session?.name || name });
+          setSession({ code: msg.code, playerId: pid, name: session?.name || name, singlePlayer: !!(msg.players || []).some((p) => p.isBot), mode: size === DUO_ROOM_SIZE ? "duo" : "multi" });
           if (msg.state === "lobby") {
             setScreen("lobby");
-            resetRoundUi();
+            resetRoundUi(size);
             setHistoryPage(0);
           } else if (msg.state === "drafting") {
             const d = msg.draft || {};
-            const secs = d.secondsLeft ?? 30;
+            const secs = d.secondsLeft ?? DRAFT_COUNTDOWN;
             setDraft({
               attribute: d.attribute,
               attributeLabel: d.attributeLabel,
@@ -244,7 +254,7 @@ export default function App() {
             });
             setDraftStatus({
               submittedCount: d.submittedCount ?? 0,
-              requiredCount: d.requiredCount ?? 3,
+              requiredCount: d.requiredCount ?? (size === DUO_ROOM_SIZE ? DUO_ROOM_SIZE : ROOM_SIZE),
               secondsLeft: secs,
             });
             setDraftSecondsLeft(secs);
@@ -254,8 +264,8 @@ export default function App() {
             setGuessInfo({
               submitted: !!msg.guess?.submitted,
               submittedCount: msg.guess?.submittedCount ?? 0,
-              requiredCount: msg.guess?.requiredCount ?? 3,
-              secondsLeft: msg.guess?.secondsLeft ?? 60,
+              requiredCount: msg.guess?.requiredCount ?? size,
+              secondsLeft: msg.guess?.secondsLeft ?? GUESS_COUNTDOWN,
             });
             setSuggestions([]);
             setScreen("guessing");
@@ -285,7 +295,7 @@ export default function App() {
           break;
       }
     },
-    [name, players, resetRoundUi, round, screen, session?.name]
+    [draftStatus.requiredCount, name, players, resetRoundUi, roomSize, round, screen, session?.name]
   );
 
   useEffect(() => {
@@ -335,12 +345,12 @@ export default function App() {
       if (!game || game.state !== "drafting") return;
       const secs = game.draftSecondsLeft();
       setDraftSecondsLeft(secs);
-      setDraftStatus((s) => ({ ...s, secondsLeft: secs, submittedCount: Object.keys(game.selections).length }));
+      setDraftStatus((s) => ({ ...s, secondsLeft: secs, submittedCount: Object.keys(game.selections).length, requiredCount: game.requiredSelections() }));
       if (secs <= 0) {
         clearInterval(localDraftTimerRef.current);
         localDraftTimerRef.current = null;
         game.autoSelectMissing();
-        setDraftStatus((s) => ({ ...s, submittedCount: 3, requiredCount: 3, secondsLeft: 0 }));
+        setDraftStatus((s) => ({ ...s, submittedCount: game.requiredSelections(), requiredCount: game.requiredSelections(), secondsLeft: 0 }));
         startLocalGuessing();
       }
     }, 500);
@@ -352,7 +362,7 @@ export default function App() {
       const game = localGameRef.current;
       if (!game || game.state !== "guessing") return;
       const secs = game.guessSecondsLeft();
-      setGuessInfo((g) => ({ ...g, secondsLeft: secs, submittedCount: Object.keys(game.guesses).length }));
+      setGuessInfo((g) => ({ ...g, secondsLeft: secs, submittedCount: Object.keys(game.guesses).length, requiredCount: game.roomSize }));
       if (secs <= 0) {
         clearInterval(localGuessTimerRef.current);
         localGuessTimerRef.current = null;
@@ -374,7 +384,7 @@ export default function App() {
     setGuessInfo({
       submitted: !!game.guesses.p1,
       submittedCount: Object.keys(game.guesses).length,
-      requiredCount: 3,
+      requiredCount: game.roomSize,
       secondsLeft: game.guessSecondsLeft() || GUESS_COUNTDOWN,
     });
     setGuess("");
@@ -395,7 +405,7 @@ export default function App() {
     setRound(game.roundNumber);
     setPlayers(game.playerList());
     setGameOver(null);
-    resetRoundUi();
+    resetRoundUi(game.roomSize);
     const attr = game.assignments.p1;
     const secs = game.draftSecondsLeft() || DRAFT_COUNTDOWN;
     setDraft({
@@ -405,7 +415,7 @@ export default function App() {
       selected: game.selections.p1 || null,
       refreshesLeft: game.draftRefreshesLeft.p1 ?? 0,
     });
-    setDraftStatus({ submittedCount: Object.keys(game.selections).length, requiredCount: 3, secondsLeft: secs });
+    setDraftStatus({ submittedCount: Object.keys(game.selections).length, requiredCount: game.requiredSelections(), secondsLeft: secs });
     setDraftSecondsLeft(secs);
     setScreen(game.selections.p1 ? "waiting" : "drafting");
     if (game.allSelected()) {
@@ -449,18 +459,21 @@ export default function App() {
     }
   }, [startLocalRound]);
 
-  const createRoom = (singlePlayer = false) => {
+  const createRoom = (mode = "multi") => {
     const trimmed = name.trim();
     if (!trimmed) {
       setError("Enter your name");
       return;
     }
     setError("");
-    if (singlePlayer) {
+    // local single-player modes: "single" (1v2 bots) and "duo" (1v1 bot)
+    if (mode === "single" || mode === "duo") {
       clearLocalTimers();
-      const game = new FooTrioGame(trimmed);
+      const game = new FooTrioGame(trimmed, mode);
       localGameRef.current = game;
       setIsSingle(true);
+      setSingleMode(mode);
+      setRoomSize(game.roomSize);
       setSession(null);
       setPlayerId("p1");
       setRoomCode("LOCAL");
@@ -470,8 +483,9 @@ export default function App() {
       setHistory([]);
       setHistoryPage(0);
       setStatus("");
+      resetRoundUi(game.roomSize);
       setScreen("lobby");
-      // auto-start like server single-player
+      // auto-start
       setTimeout(() => {
         if (localGameRef.current === game) startLocalRound();
       }, 200);
@@ -483,6 +497,7 @@ export default function App() {
     }
     setIsSingle(false);
     localGameRef.current = null;
+    setRoomSize(ROOM_SIZE);
     setStatus("Connecting...");
     connect((ws) => {
       ws.send(
@@ -692,7 +707,7 @@ export default function App() {
             <div>
               <h1 className="text-3xl font-extrabold tracking-tight text-[#143524] dark:text-emerald-300">Football Trivia Draft</h1>
               <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                Real-time multiplayer (3 players). Draft Country/Position/Club, then guess a matching footballer.
+                Draft Country/Position/Club, then guess a matching footballer. Play 3-player multiplayer, 2-player vs bot, or single player vs 2 bots.
               </p>
             </div>
             <button className="btn btn-ghost text-sm whitespace-nowrap" onClick={toggleTheme} aria-label="Toggle dark mode">
@@ -704,9 +719,10 @@ export default function App() {
               <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">Your name</label>
               <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter your name" />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <button className="btn btn-primary w-full" onClick={() => createRoom(false)}>Create Multiplayer Room</button>
-              <button className="btn btn-ghost w-full" onClick={() => createRoom(true)}>Single Player (vs 2 Bots)</button>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <button className="btn btn-primary w-full" onClick={() => createRoom("multi")}>Multiplayer (3)</button>
+              <button className="btn btn-secondary w-full" onClick={() => createRoom("duo")}>2-Player vs Bot</button>
+              <button className="btn btn-ghost w-full" onClick={() => createRoom("single")}>1 vs 2 Bots</button>
             </div>
             <div className="space-y-2 pt-1">
               <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">Join existing room</label>
@@ -767,12 +783,14 @@ export default function App() {
               <h3 className="font-semibold text-lg mb-2 text-slate-900 dark:text-slate-100">Waiting for players</h3>
               <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
                 {players.some((p) => p.isBot)
-                  ? "Single player test mode: you vs 2 bots. Round 1 starts automatically."
-                  : "Exactly 3 players are required. Round 1 starts automatically once everyone joins."}
+                  ? (roomSize === DUO_ROOM_SIZE
+                    ? "2-player mode: you vs 1 bot. Round 1 starts automatically."
+                    : "Single player mode: you vs 2 bots. Round 1 starts automatically.")
+                  : `Exactly ${roomSize} players are required. Round 1 starts automatically once everyone joins.`}
               </p>
-              <PlayerChips players={players} />
+              <PlayerChips players={players} roomSize={roomSize} />
               <div className="mt-4 text-sm text-slate-700 dark:text-slate-300">
-                {players.length}/3 joined
+                {players.length}/{roomSize} joined
               </div>
             </div>
           )}
@@ -1044,7 +1062,7 @@ export default function App() {
             <ul className="text-sm text-slate-700 dark:text-slate-300 space-y-1">
               <li>State: <span className="font-medium text-slate-900 dark:text-slate-100">{screen}</span></li>
               <li>Round: <span className="font-medium text-slate-900 dark:text-slate-100">{round || "-"}</span></li>
-              <li>Players: <span className="font-medium text-slate-900 dark:text-slate-100">{players.length}/3</span></li>
+              <li>Players: <span className="font-medium text-slate-900 dark:text-slate-100">{players.length}/{roomSize}</span></li>
             </ul>
             {screen === "waiting" && draft?.selected && (
               <div className="mt-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 dark:text-amber-100 dark:bg-amber-900/30 dark:border-amber-700">
@@ -1151,7 +1169,7 @@ function Shell({ children, center = false }) {
   );
 }
 
-function PlayerChips({ players }) {
+function PlayerChips({ players, roomSize = 3 }) {
   return (
     <div className="flex flex-wrap gap-2">
       {players.map((p) => (
@@ -1161,7 +1179,7 @@ function PlayerChips({ players }) {
           {p.isBot ? " (bot)" : ""}
         </span>
       ))}
-      {Array.from({ length: Math.max(0, 3 - players.length) }).map((_, i) => (
+      {Array.from({ length: Math.max(0, roomSize - players.length) }).map((_, i) => (
         <span key={`empty-${i}`} className="pill bg-slate-100 text-slate-500 border border-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600">
           Waiting...
         </span>
