@@ -8,15 +8,10 @@ function resolveWsUrl() {
     const params = new URLSearchParams(window.location.search);
     const fromQuery = params.get("ws") || params.get("wsUrl") || params.get("backend");
     if (fromQuery) {
-      try {
-        localStorage.setItem("ft-ws-url", fromQuery);
-      } catch {
-        // ignore storage errors
-      }
       return fromQuery;
     }
-    const stored = localStorage.getItem("ft-ws-url");
-    if (stored) return stored;
+    // Clear legacy cached tunnel URL so stale/expired tunnels are never reused.
+    localStorage.removeItem("ft-ws-url");
   } catch {
     // ignore
   }
@@ -305,11 +300,8 @@ export default function App() {
           // do not auto-reconnect aggressively; user can rejoin via session
         };
         ws.onerror = () => {
-          try {
-            localStorage.removeItem("ft-ws-url");
-          } catch {}
           setError(
-            `Could not connect to the game server (${WS_URL || "no URL configured"}). Pastikan 'python app.py' sedang berjalan, lalu buka link baru yang tercetak (https://footrio-pavo2.vercel.app/?ws=...). URL tunnel berubah tiap kali app.py dijalankan.`
+            `Could not connect to the game server. Pastikan 'python app.py' sedang berjalan, lalu buka https://footrio-pavo2.vercel.app/ dari tab yang dibuka otomatis oleh app.py (atau jalankan app.py lagi). URL tunnel berubah tiap kali app.py dijalankan.`
           );
         };
         ws.onmessage = (ev) => {
