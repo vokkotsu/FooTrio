@@ -686,7 +686,7 @@ export default function App() {
   // --- UI screens ---
   if (screen === "landing") {
     return (
-      <Shell>
+      <Shell center>
         <div className="card w-full max-w-lg p-8">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -1143,10 +1143,10 @@ function isSameOption(a, b) {
   return a === b;
 }
 
-function Shell({ children }) {
+function Shell({ children, center = false }) {
   return (
-    <div className="min-h-screen px-4 py-6 md:py-10">
-      <div className="max-w-6xl mx-auto flex items-start justify-center">{children}</div>
+    <div className={`min-h-screen px-4 py-6 md:py-10 flex justify-center ${center ? "items-center" : "items-start"}`}>
+      <div className="w-full max-w-6xl flex justify-center">{children}</div>
     </div>
   );
 }
