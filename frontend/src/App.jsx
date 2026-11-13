@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 function resolveWsUrl() {
+  if (typeof window === "undefined") {
+    return import.meta.env.VITE_WS_URL || "";
+  }
   try {
     const params = new URLSearchParams(window.location.search);
     const fromQuery = params.get("ws") || params.get("wsUrl") || params.get("backend");
     if (fromQuery) {
-      localStorage.setItem("ft-ws-url", fromQuery);
+      try {
+        localStorage.setItem("ft-ws-url", fromQuery);
+      } catch {
+        // ignore storage errors
+      }
       return fromQuery;
     }
     const stored = localStorage.getItem("ft-ws-url");
@@ -37,7 +44,10 @@ export default function App() {
       const t = localStorage.getItem("theme");
       if (t === "light" || t === "dark") return t;
     } catch {}
-    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    if (typeof window !== "undefined" && window.matchMedia) {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    return "light";
   });
   const [joinCode, setJoinCode] = useState("");
   const [error, setError] = useState("");
