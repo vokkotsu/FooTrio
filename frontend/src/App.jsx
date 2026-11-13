@@ -1,4 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  FooTrioGame,
+  searchPlayerNames as localSearchPlayerNames,
+  DRAFT_COUNTDOWN,
+  GUESS_COUNTDOWN,
+  ATTRIBUTE_LABELS,
+} from "./gameLogic";
 
 const WS_URL =
   import.meta.env.VITE_WS_URL ||
@@ -12,7 +19,13 @@ export default function App() {
   const wsRef = useRef(null);
   const handleMessageRef = useRef(null);
   const reconnectTimer = useRef(null);
+  const localGameRef = useRef(null);
+  const localDraftTimerRef = useRef(null);
+  const localGuessTimerRef = useRef(null);
+  const localNextRoundRef = useRef(null);
+  const isSingleRef = useRef(false);
 
+  const [isSingle, setIsSingle] = useState(false);
   const [screen, setScreen] = useState("landing"); // landing | lobby | drafting | waiting | guessing | result | game_over
   const [name, setName] = useState("");
   const [theme, setTheme] = useState(() => {
@@ -81,6 +94,21 @@ export default function App() {
     setSuggestions([]);
     setResult(null);
   }, []);
+
+  const clearLocalTimers = useCallback(() => {
+    if (localDraftTimerRef.current) clearInterval(localDraftTimerRef.current);
+    if (localGuessTimerRef.current) clearInterval(localGuessTimerRef.current);
+    if (localNextRoundRef.current) clearTimeout(localNextRoundRef.current);
+    localDraftTimerRef.current = null;
+    localGuessTimerRef.current = null;
+    localNextRoundRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    isSingleRef.current = isSingle;
+  }, [isSingle]);
+
+  useEffect(() => () => clearLocalTimers(), [clearLocalTimers]);
 
   const handleMessage = useCallback(
     (msg) => {
@@ -300,6 +328,127 @@ export default function App() {
     [handleMessage]
   );
 
+  const startLocalDraftTimer = useCallback(() => {
+    if (localDraftTimerRef.current) clearInterval(localDraftTimerRef.current);
+    localDraftTimerRef.current = setInterval(() => {
+      const game = localGameRef.current;
+      if (!game || game.state !== "drafting") return;
+      const secs = game.draftSecondsLeft();
+      setDraftSecondsLeft(secs);
+      setDraftStatus((s) => ({ ...s, secondsLeft: secs, submittedCount: Object.keys(game.selections).length }));
+      if (secs <= 0) {
+        clearInterval(localDraftTimerRef.current);
+        localDraftTimerRef.current = null;
+        game.autoSelectMissing();
+        setDraftStatus((s) => ({ ...s, submittedCount: 3, requiredCount: 3, secondsLeft: 0 }));
+        startLocalGuessing();
+      }
+    }, 500);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const startLocalGuessTimer = useCallback(() => {
+    if (localGuessTimerRef.current) clearInterval(localGuessTimerRef.current);
+    localGuessTimerRef.current = setInterval(() => {
+      const game = localGameRef.current;
+      if (!game || game.state !== "guessing") return;
+      const secs = game.guessSecondsLeft();
+      setGuessInfo((g) => ({ ...g, secondsLeft: secs, submittedCount: Object.keys(game.guesses).length }));
+      if (secs <= 0) {
+        clearInterval(localGuessTimerRef.current);
+        localGuessTimerRef.current = null;
+        finalizeLocalRound();
+      }
+    }, 500);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const startLocalGuessing = useCallback(() => {
+    const game = localGameRef.current;
+    if (!game || game.state !== "drafting") return;
+    if (localDraftTimerRef.current) {
+      clearInterval(localDraftTimerRef.current);
+      localDraftTimerRef.current = null;
+    }
+    game.startGuessing();
+    setPlayers(game.playerList());
+    setConstraints(game.currentConstraints());
+    setGuessInfo({
+      submitted: !!game.guesses.p1,
+      submittedCount: Object.keys(game.guesses).length,
+      requiredCount: 3,
+      secondsLeft: game.guessSecondsLeft() || GUESS_COUNTDOWN,
+    });
+    setGuess("");
+    setSuggestions([]);
+    setScreen("guessing");
+    if (game.allGuessed()) {
+      finalizeLocalRound();
+    } else {
+      startLocalGuessTimer();
+    }
+  }, [startLocalGuessTimer]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const startLocalRound = useCallback(() => {
+    const game = localGameRef.current;
+    if (!game) return;
+    clearLocalTimers();
+    game.startRound();
+    setRound(game.roundNumber);
+    setPlayers(game.playerList());
+    setGameOver(null);
+    resetRoundUi();
+    const attr = game.assignments.p1;
+    const secs = game.draftSecondsLeft() || DRAFT_COUNTDOWN;
+    setDraft({
+      attribute: attr,
+      attributeLabel: ATTRIBUTE_LABELS[attr] || attr,
+      options: game.draftOptions.p1 || [],
+      selected: game.selections.p1 || null,
+      refreshesLeft: game.draftRefreshesLeft.p1 ?? 0,
+    });
+    setDraftStatus({ submittedCount: Object.keys(game.selections).length, requiredCount: 3, secondsLeft: secs });
+    setDraftSecondsLeft(secs);
+    setScreen(game.selections.p1 ? "waiting" : "drafting");
+    if (game.allSelected()) {
+      startLocalGuessing();
+    } else {
+      startLocalDraftTimer();
+    }
+  }, [clearLocalTimers, resetRoundUi, startLocalDraftTimer, startLocalGuessing]);
+
+  const finalizeLocalRound = useCallback(() => {
+    const game = localGameRef.current;
+    if (!game || game.state !== "guessing") return;
+    if (localGuessTimerRef.current) {
+      clearInterval(localGuessTimerRef.current);
+      localGuessTimerRef.current = null;
+    }
+    const resultMsg = game.finalizeRound();
+    if (!resultMsg) return;
+    setResult(resultMsg);
+    setPlayers(game.playerList());
+    setHistory([...game.history]);
+    setHistoryPage(Math.max(0, game.history.length - 1));
+    if (resultMsg.gameOver) {
+      const winner = game.playerList().find((p) => p.id === resultMsg.winnerId) || null;
+      setGameOver({
+        type: "game_over",
+        winnerId: resultMsg.winnerId,
+        winnerName: winner ? winner.name : null,
+        draw: !!resultMsg.draw,
+        players: game.playerList(),
+        history: game.history,
+      });
+      setScreen("game_over");
+    } else {
+      setScreen("result");
+      localNextRoundRef.current = setTimeout(() => {
+        if (isSingleRef.current && localGameRef.current && localGameRef.current.state === "result") {
+          startLocalRound();
+        }
+      }, 2000);
+    }
+  }, [startLocalRound]);
+
   const createRoom = (singlePlayer = false) => {
     const trimmed = name.trim();
     if (!trimmed) {
@@ -307,13 +456,40 @@ export default function App() {
       return;
     }
     setError("");
+    if (singlePlayer) {
+      clearLocalTimers();
+      const game = new FooTrioGame(trimmed);
+      localGameRef.current = game;
+      setIsSingle(true);
+      setSession(null);
+      setPlayerId("p1");
+      setRoomCode("LOCAL");
+      setPlayers(game.playerList());
+      setHostId("p1");
+      setRound(0);
+      setHistory([]);
+      setHistoryPage(0);
+      setStatus("");
+      setScreen("lobby");
+      // auto-start like server single-player
+      setTimeout(() => {
+        if (localGameRef.current === game) startLocalRound();
+      }, 200);
+      return;
+    }
+    if (!WS_URL) {
+      setError("Backend WebSocket URL is not configured. Set VITE_WS_URL for multiplayer on deployed builds.");
+      return;
+    }
+    setIsSingle(false);
+    localGameRef.current = null;
     setStatus("Connecting...");
     connect((ws) => {
       ws.send(
         JSON.stringify({
           type: "create_room",
           name: trimmed,
-          mode: singlePlayer ? "single" : "multi",
+          mode: "multi",
         })
       );
       setStatus("");
@@ -331,7 +507,13 @@ export default function App() {
       setError("Enter a room code");
       return;
     }
+    if (!WS_URL) {
+      setError("Backend WebSocket URL is not configured. Set VITE_WS_URL for multiplayer on deployed builds.");
+      return;
+    }
     setError("");
+    setIsSingle(false);
+    localGameRef.current = null;
     setStatus("Connecting...");
     connect((ws) => {
       ws.send(JSON.stringify({ type: "join_room", name: trimmed, code }));
@@ -343,33 +525,37 @@ export default function App() {
   useEffect(() => {
     if (!session || screen !== "landing") return;
     if (session.singlePlayer) return;
+    if (!WS_URL) return;
     connect((ws) => {
       ws.send(JSON.stringify({ type: "rejoin_room", code: session.code, playerId: session.playerId }));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // guess countdown tick (client-side)
+  // guess countdown tick (client-side, multiplayer/server-timed display)
   useEffect(() => {
+    if (isSingle) return;
     if (screen !== "guessing") return;
     if (guessInfo.secondsLeft <= 0) return;
     const t = setTimeout(() => {
       setGuessInfo((g) => ({ ...g, secondsLeft: Math.max(0, g.secondsLeft - 1) }));
     }, 1000);
     return () => clearTimeout(t);
-  }, [screen, guessInfo.secondsLeft]);
+  }, [screen, guessInfo.secondsLeft, isSingle]);
 
-  // draft countdown tick (client-side)
+  // draft countdown tick (client-side, multiplayer/server-timed display)
   useEffect(() => {
+    if (isSingle) return;
     if (screen !== "drafting" && screen !== "waiting") return;
     if (draftSecondsLeft <= 0) return;
     const t = setTimeout(() => {
       setDraftSecondsLeft((s) => Math.max(0, s - 1));
     }, 1000);
     return () => clearTimeout(t);
-  }, [screen, draftSecondsLeft]);
+  }, [screen, draftSecondsLeft, isSingle]);
 
   const send = (payload) => {
+    if (isSingle) return;
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(payload));
@@ -378,12 +564,48 @@ export default function App() {
 
   const selectOption = (value) => {
     if (!draft || draft.selected) return;
+    if (isSingle) {
+      const game = localGameRef.current;
+      if (!game) return;
+      const res = game.submitSelection("p1", value);
+      if (!res.ok) {
+        setError(res.error || "Invalid selection");
+        return;
+      }
+      setError("");
+      setDraft((d) => (d ? { ...d, selected: value } : d));
+      setDraftStatus((s) => ({ ...s, submittedCount: Object.keys(game.selections).length, secondsLeft: game.draftSecondsLeft() }));
+      setScreen("waiting");
+      if (game.allSelected()) {
+        startLocalGuessing();
+      }
+      return;
+    }
     send({ type: "select_option", value });
   };
 
   const refreshDraft = () => {
     if (!draft || draft.selected) return;
     if ((draft.refreshesLeft ?? 0) <= 0) return;
+    if (isSingle) {
+      const game = localGameRef.current;
+      if (!game) return;
+      const res = game.refreshDraftOptions("p1");
+      if (!res.ok) {
+        setError(res.error || "Could not refresh options");
+        return;
+      }
+      const attr = game.assignments.p1;
+      setDraft({
+        attribute: attr,
+        attributeLabel: ATTRIBUTE_LABELS[attr] || attr,
+        options: res.options || [],
+        selected: game.selections.p1 || null,
+        refreshesLeft: res.refreshesLeft ?? 0,
+      });
+      setError("");
+      return;
+    }
     send({ type: "refresh_draft" });
   };
 
@@ -395,6 +617,20 @@ export default function App() {
     }
     setError("");
     setSuggestions([]);
+    if (isSingle) {
+      const game = localGameRef.current;
+      if (!game) return;
+      const res = game.submitGuess("p1", text);
+      if (!res.ok) {
+        setError(res.error || "Invalid guess");
+        return;
+      }
+      setGuessInfo((g) => ({ ...g, submitted: true, submittedCount: Object.keys(game.guesses).length, secondsLeft: game.guessSecondsLeft() }));
+      if (game.allGuessed()) {
+        finalizeLocalRound();
+      }
+      return;
+    }
     send({ type: "submit_guess", guess: text });
     setGuessInfo((g) => ({ ...g, submitted: true }));
   };
@@ -407,6 +643,10 @@ export default function App() {
       setSuggestions([]);
       return;
     }
+    if (isSingle) {
+      setSuggestions(localSearchPlayerNames(q, 8));
+      return;
+    }
     send({ type: "search_players", query: q });
   };
 
@@ -417,19 +657,28 @@ export default function App() {
   };
 
   const leaveToHome = () => {
-    send({ type: "leave" });
-    try {
-      wsRef.current?.close();
-    } catch {}
+    if (isSingle) {
+      clearLocalTimers();
+      localGameRef.current = null;
+      setIsSingle(false);
+    } else {
+      send({ type: "leave" });
+      try {
+        wsRef.current?.close();
+      } catch {}
+    }
     setSession(null);
     setScreen("landing");
     setPlayers([]);
     setRoomCode(null);
     setPlayerId(null);
+    setRound(0);
     resetRoundUi();
     setGameOver(null);
     setHistory([]);
     setHistoryPage(0);
+    setStatus("");
+    setError("");
   };
 
   const me = useMemo(() => players.find((p) => p.id === playerId), [players, playerId]);
@@ -475,7 +724,7 @@ export default function App() {
             {error && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{error}</p>}
             {!WS_URL && (
               <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 dark:text-amber-200 dark:bg-amber-900/30 dark:border-amber-700">
-                Backend WebSocket URL is not configured. Set <code>VITE_WS_URL</code> for deployed builds.
+                Multiplayer requires a backend WebSocket URL. Single Player works without it. Set <code>VITE_WS_URL</code> for multiplayer on deployed builds.
               </p>
             )}
           </div>
