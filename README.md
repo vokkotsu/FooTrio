@@ -66,38 +66,45 @@ python preprocess_data.py
 
 Both scripts identify the relevant columns, merge club history per player, extract unique option pools (countries/positions/clubs), and write `game_data.json` with player records, a normalized name index for guess verification, and option pools.
 
-## Running Locally
+## Running (Vercel + local backend)
+
+The frontend is deployed on Vercel (https://footrio-pavo2.vercel.app). To play, run the backend locally and expose it so Vercel can connect:
 
 ### Prerequisites
 - Python 3.10+
-- Node.js 18+ and npm
+- A tunnel tool in PATH: `cloudflared` (recommended), `ngrok`, or `ssh`
 
-### Quick start (single command)
+### Start
 
 From the project root:
 
 ```bash
-python run.py
+python app.py
 ```
 
-On the first run this will automatically install missing backend (`pip install -r backend/requirements.txt`) and frontend (`npm install`) dependencies, then start both servers:
+This will start the backend, open a public tunnel, and automatically open https://footrio-pavo2.vercel.app in your browser (with the backend connection attached). Keep the terminal open while playing; press `Ctrl+C` to stop.
 
-- Backend: http://localhost:8000 (WebSocket: `ws://localhost:8000/ws`)
-- Frontend: http://localhost:5173
+Options:
+```bash
+python app.py --tunnel auto|cloudflared|ngrok|ssh
+python app.py --port 8000
+```
 
-Open the frontend URL, then choose **“Single Player (vs 2 Bots)”** for a quick test or create/join a multiplayer room. Press `Ctrl+C` to stop both. (Requires Python 3.10+ and Node.js/npm on your PATH.)
+### Local development (optional)
 
-### Run separately (optional)
+To run backend and frontend locally without Vercel:
 
 **Backend**
 ```bash
 cd backend
+pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 ```
 
 **Frontend**
 ```bash
 cd frontend
+npm install
 npm run dev
 ```
 

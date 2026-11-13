@@ -11,7 +11,8 @@ import sys
 import threading
 import time
 import urllib.request
-from urllib.parse import quote, urlencode, urlparse
+import webbrowser
+from urllib.parse import quote, urlparse
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 BACKEND = os.path.join(ROOT, "backend")
@@ -85,11 +86,11 @@ def wait_for_backend(port, timeout=20):
     return False
 
 
-def _stream_output(pipe, prefix, on_line=None):
+def _stream_output(pipe, prefix, on_line=None, quiet=False):
     try:
         for raw in iter(pipe.readline, ""):
             line = raw.rstrip()
-            if line:
+            if line and not quiet:
                 print(f"[{prefix}] {line}")
             if on_line:
                 on_line(line)
@@ -214,26 +215,24 @@ def to_ws_url(http_url):
 
 
 def print_ready(http_url, ws_url, vercel_url):
+    vercel_url = (vercel_url or "https://footrio-pavo2.vercel.app").strip().rstrip("/")
+    sep = "&" if "?" in vercel_url else "?"
+    play_url = f"{vercel_url}{sep}ws={quote(ws_url, safe='')}"
+
     print()
     print("=" * 60)
-    print("Backend lokal aktif dan diekspos ke internet.")
-    print(f"  Public URL : {http_url}")
-    print(f"  WebSocket  : {ws_url}")
+    print("Backend aktif. Membuka game Vercel...")
+    print(f"  {vercel_url}/")
     print()
-    if vercel_url:
-        sep = "&" if "?" in vercel_url else "?"
-        play_url = f"{vercel_url}{sep}ws={quote(ws_url, safe='')}"
-        print("Buka game Vercel-mu lewat link ini (backend akan terhubung):")
-        print(f"  {play_url}")
-    else:
-        print("Agar game Vercel bisa dimainkan, buka URL Vercel-mu dengan parameter ws:")
-        print(f"  https://<app-vercel-kamu>.vercel.app/?ws={quote(ws_url, safe='')}")
-        print()
-        print("Atau set VITE_WS_URL di Vercel ke nilai WebSocket di atas lalu redeploy.")
-    print()
-    print("Catatan: laptop & tunnel harus tetap menyala. Tekan Ctrl+C untuk berhenti.")
+    print("Jika browser tidak terbuka otomatis, buka URL Vercel di atas.")
+    print("Biarkan terminal ini tetap terbuka saat bermain. Tekan Ctrl+C untuk berhenti.")
     print("=" * 60)
     print()
+
+    try:
+        webbrowser.open(play_url)
+    except Exception:
+        pass
 
 
 def main():
@@ -291,7 +290,12 @@ def main():
             if url:
                 announce(url)
 
-        threading.Thread(target=_stream_output, args=(tunnel_proc.stdout, tunnel_kind, on_line), daemon=True).start()
+        threading.Thread(
+            target=_stream_output,
+            args=(tunnel_proc.stdout, tunnel_kind, on_line),
+            kwargs={"quiet": True},
+            daemon=True,
+        ).start()
 
     if tunnel_kind == "ngrok" and not announced["done"]:
         url = get_ngrok_url_from_api()
@@ -342,7 +346,12 @@ def main():
                         if url:
                             announce(url)
 
-                    threading.Thread(target=_stream_output, args=(tunnel_proc.stdout, tunnel_kind, on_line), daemon=True).start()
+                    threading.Thread(
+                        target=_stream_output,
+                        args=(tunnel_proc.stdout, tunnel_kind, on_line),
+                        kwargs={"quiet": True},
+                        daemon=True,
+                    ).start()
                 if tunnel_kind == "ngrok":
                     url = get_ngrok_url_from_api()
                     if url:
