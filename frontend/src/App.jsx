@@ -305,8 +305,11 @@ export default function App() {
           // do not auto-reconnect aggressively; user can rejoin via session
         };
         ws.onerror = () => {
+          try {
+            localStorage.removeItem("ft-ws-url");
+          } catch {}
           setError(
-            `Could not connect to the game server (${WS_URL || "no URL configured"}). Pastikan backend menyala (python app.py) dan URL ws/wss benar.`
+            `Could not connect to the game server (${WS_URL || "no URL configured"}). Pastikan 'python app.py' sedang berjalan, lalu buka link baru yang tercetak (https://footrio-pavo2.vercel.app/?ws=...). URL tunnel berubah tiap kali app.py dijalankan.`
           );
         };
         ws.onmessage = (ev) => {

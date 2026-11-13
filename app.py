@@ -127,7 +127,7 @@ def start_tunnel(port, tunnel):
         if not cloudflared:
             print("cloudflared not found. Install it from https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/")
             return None, "none"
-        cmd = [cloudflared, "tunnel", "--url", f"http://localhost:{port}"]
+        cmd = [cloudflared, "tunnel", "--no-autoupdate", "--url", f"http://127.0.0.1:{port}"]
     elif tunnel == "ssh":
         if not ssh:
             print("ssh not found.")
@@ -323,11 +323,30 @@ def main():
             if backend_proc.poll() is not None:
                 print(f"\nBackend exited (code {backend_proc.returncode}). Stopping...")
                 return
-            if tunnel_proc and tunnel_proc.poll() is not None and not announced["done"]:
-                print(f"\nTunnel exited (code {tunnel_proc.returncode}) sebelum URL publik didapat.")
-                print("Tidak bisa menghubungkan ke Vercel tanpa URL publik. Coba jalankan ulang dengan --tunnel ngrok/cloudflared.")
-                cleanup()
-                return
+            if tunnel_proc and tunnel_proc.poll() is not None:
+                if not announced["done"]:
+                    print(f"\nTunnel exited (code {tunnel_proc.returncode}) sebelum URL publik didapat.")
+                    print("Tidak bisa menghubungkan ke Vercel tanpa URL publik. Coba jalankan ulang dengan --tunnel ngrok/cloudflared.")
+                    cleanup()
+                    return
+                print(f"\nTunnel terputus (code {tunnel_proc.returncode}). Mencoba membuka tunnel baru...")
+                announced["done"] = False
+                tunnel_proc, tunnel_kind = start_tunnel(args.port, args.tunnel)
+                if not tunnel_proc or tunnel_kind == "none":
+                    print("Gagal membuka ulang tunnel. Hentikan dan jalankan 'python app.py' lagi.")
+                    cleanup()
+                    return
+                if tunnel_proc.stdout:
+                    def on_line(line):
+                        url = extract_public_url(line)
+                        if url:
+                            announce(url)
+
+                    threading.Thread(target=_stream_output, args=(tunnel_proc.stdout, tunnel_kind, on_line), daemon=True).start()
+                if tunnel_kind == "ngrok":
+                    url = get_ngrok_url_from_api()
+                    if url:
+                        announce(url)
             time.sleep(0.5)
     except KeyboardInterrupt:
         print("\nStopping...")
