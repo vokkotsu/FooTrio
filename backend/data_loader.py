@@ -197,25 +197,26 @@ def search_player_names(query: str, limit: int = 8):
     if not q:
         return []
     pairs = _player_name_pairs()
-    starts = []
+    token_starts = []
     contains = []
     seen = set()
     for name, norm, position in pairs:
         if not norm or norm in seen:
             continue
         item = {"name": name, "position": position}
-        if norm.startswith(q):
+        tokens = norm.split()
+        if any(t.startswith(q) for t in tokens):
             seen.add(norm)
-            starts.append(item)
-            if len(starts) >= limit:
-                return starts[:limit]
+            token_starts.append(item)
+            if len(token_starts) >= limit:
+                return token_starts[:limit]
         elif q in norm:
             contains.append((norm, item))
     for norm, item in contains:
         if norm in seen:
             continue
         seen.add(norm)
-        starts.append(item)
-        if len(starts) >= limit:
+        token_starts.append(item)
+        if len(token_starts) >= limit:
             break
-    return starts[:limit]
+    return token_starts[:limit]

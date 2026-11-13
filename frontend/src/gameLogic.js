@@ -188,16 +188,17 @@ const playerNamePairs = (allPlayers || [])
 export function searchPlayerNames(query, limit = 8) {
   const q = normalizeName(query);
   if (!q) return [];
-  const starts = [];
+  const tokenStarts = [];
   const contains = [];
   const seen = new Set();
   for (const item of playerNamePairs) {
     if (!item.norm || seen.has(item.norm)) continue;
     const out = { name: item.name, position: item.position };
-    if (item.norm.startsWith(q)) {
+    const tokens = item.norm.split(/\s+/).filter(Boolean);
+    if (tokens.some((t) => t.startsWith(q))) {
       seen.add(item.norm);
-      starts.push(out);
-      if (starts.length >= limit) return starts.slice(0, limit);
+      tokenStarts.push(out);
+      if (tokenStarts.length >= limit) return tokenStarts.slice(0, limit);
     } else if (item.norm.includes(q)) {
       contains.push(out);
     }
@@ -206,10 +207,10 @@ export function searchPlayerNames(query, limit = 8) {
     const norm = normalizeName(out.name);
     if (seen.has(norm)) continue;
     seen.add(norm);
-    starts.push(out);
-    if (starts.length >= limit) break;
+    tokenStarts.push(out);
+    if (tokenStarts.length >= limit) break;
   }
-  return starts.slice(0, limit);
+  return tokenStarts.slice(0, limit);
 }
 
 function pickBotOption(attr, options) {
