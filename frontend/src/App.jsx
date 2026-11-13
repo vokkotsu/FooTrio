@@ -1,10 +1,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-const WS_URL =
-  import.meta.env.VITE_WS_URL ||
-  (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-    ? "ws://localhost:8000/ws"
-    : "");
+function resolveWsUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const fromQuery = params.get("ws") || params.get("wsUrl") || params.get("backend");
+    if (fromQuery) {
+      localStorage.setItem("ft-ws-url", fromQuery);
+      return fromQuery;
+    }
+    const stored = localStorage.getItem("ft-ws-url");
+    if (stored) return stored;
+  } catch {
+    // ignore
+  }
+  return (
+    import.meta.env.VITE_WS_URL ||
+    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+      ? "ws://localhost:8000/ws"
+      : "")
+  );
+}
+
+const WS_URL = resolveWsUrl();
 
 const SESSION_KEY = "ft-session";
 
@@ -278,7 +295,9 @@ export default function App() {
           // do not auto-reconnect aggressively; user can rejoin via session
         };
         ws.onerror = () => {
-          setError("Could not connect to the game server. Is the backend running on ws://localhost:8000/ws?");
+          setError(
+            `Could not connect to the game server (${WS_URL || "no URL configured"}). Pastikan backend menyala (python app.py) dan URL ws/wss benar.`
+          );
         };
         ws.onmessage = (ev) => {
           try {
@@ -472,7 +491,8 @@ export default function App() {
             {error && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{error}</p>}
             {!WS_URL && (
               <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 dark:text-amber-200 dark:bg-amber-900/30 dark:border-amber-700">
-                Set <code>VITE_WS_URL</code> for deployed builds (e.g. ws://localhost:8000/ws locally).
+                Backend URL belum di-set. Jalankan <code>python app.py</code> di lokal, lalu buka link Vercel dengan
+                parameter <code>?ws=wss://&lt;tunnel-anda&gt;/ws</code> (atau set <code>VITE_WS_URL</code> lalu redeploy).
               </p>
             )}
           </div>
