@@ -11,7 +11,6 @@ import sys
 import threading
 import time
 import urllib.request
-import webbrowser
 from urllib.parse import quote, urlparse
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -67,6 +66,9 @@ def start_backend(port):
         "0.0.0.0",
         "--port",
         str(port),
+        "--proxy-headers",
+        "--forwarded-allow-ips",
+        "*",
     ]
     p = subprocess.Popen(cmd, cwd=BACKEND, env=env)
     procs.append(p)
@@ -128,7 +130,15 @@ def start_tunnel(port, tunnel):
         if not cloudflared:
             print("cloudflared not found. Install it from https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/")
             return None, "none"
-        cmd = [cloudflared, "tunnel", "--no-autoupdate", "--url", f"http://127.0.0.1:{port}"]
+        cmd = [
+            cloudflared,
+            "tunnel",
+            "--no-autoupdate",
+            "--protocol",
+            "http2",
+            "--url",
+            f"http://127.0.0.1:{port}",
+        ]
     elif tunnel == "ssh":
         if not ssh:
             print("ssh not found.")
@@ -221,18 +231,17 @@ def print_ready(http_url, ws_url, vercel_url):
 
     print()
     print("=" * 60)
-    print("Backend is running. Opening the Vercel game...")
-    print(f"  {vercel_url}/")
+    print("Backend is running and exposed via a public tunnel.")
     print()
-    print("If the browser does not open automatically, open the Vercel URL above.")
+    print("Open this URL to play (do not open the tunnel URL directly):")
+    print(f"  {play_url}")
+    print()
+    print(f"Game URL     : {vercel_url}/")
+    print(f"WebSocket    : {ws_url}")
+    print()
     print("Keep this terminal open while playing. Press Ctrl+C to stop.")
     print("=" * 60)
     print()
-
-    try:
-        webbrowser.open(play_url)
-    except Exception:
-        pass
 
 
 def main():

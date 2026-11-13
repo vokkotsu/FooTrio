@@ -301,7 +301,7 @@ export default function App() {
         };
         ws.onerror = () => {
           setError(
-            "Could not connect to the game server. Make sure 'python app.py' is running, then open https://footrio-pavo2.vercel.app/ from the tab opened automatically by app.py (or run app.py again). The tunnel URL changes each time app.py starts."
+            "Could not connect to the game server. Make sure 'python app.py' is running, then open https://footrio-pavo2.vercel.app/ using the play URL printed by app.py (or run app.py again). The tunnel URL changes each time app.py starts."
           );
         };
         ws.onmessage = (ev) => {

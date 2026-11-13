@@ -82,7 +82,7 @@ From the project root:
 python app.py
 ```
 
-This will start the backend, open a public tunnel, and automatically open https://footrio-pavo2.vercel.app in your browser (with the backend connection attached). Keep the terminal open while playing; press `Ctrl+C` to stop.
+This will start the backend and open a public tunnel, then print the play URL for https://footrio-pavo2.vercel.app (with the backend connection attached). Open that URL in your browser to play. Keep the terminal open while playing; press `Ctrl+C` to stop.
 
 Options:
 ```bash
