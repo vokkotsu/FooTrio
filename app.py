@@ -67,8 +67,7 @@ def start_backend(port):
         "--port",
         str(port),
         "--proxy-headers",
-        "--forwarded-allow-ips",
-        "*",
+        "--forwarded-allow-ips=*",
     ]
     p = subprocess.Popen(cmd, cwd=BACKEND, env=env)
     procs.append(p)
