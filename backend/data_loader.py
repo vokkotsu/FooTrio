@@ -151,34 +151,48 @@ def find_player_matches(guess: str):
     return [players[i] for i in ids if i in players]
 
 
-def best_guess_for_constraints(constraints: dict, rng: random.Random | None = None) -> str:
-    """Return a plausible player name guess for the given constraints (for bots)."""
+def best_answer_for_constraints(constraints: dict, rng: random.Random | None = None):
+    """Return the best-matching player for the given constraints."""
     rng = rng or random
     players = get_players()
+    if not players:
+        return None
     country = constraints.get("country")
     position = constraints.get("position")
     club = constraints.get("club")
 
-    best_name = None
+    best = None
     best_score = -1
-    # sample to keep it cheap; fall back to full scan if needed
     sample = players if len(players) <= 5000 else rng.sample(players, 5000)
     for p in sample:
-        score = 0
-        if country and p.get("country") == country:
-            score += 1
-        if position and p.get("position") == position:
-            score += 1
-        if club and club_matches(club, p.get("clubs") or []):
-            score += 1
+        breakdown = {
+            "country": bool(country and p.get("country") == country),
+            "position": bool(position and p.get("position") == position),
+            "club": bool(club and club_matches(club, p.get("clubs") or [])),
+        }
+        score = sum(1 for v in breakdown.values() if v)
         if score > best_score:
+            best = {
+                "name": p.get("name"),
+                "player_id": p.get("player_id"),
+                "country": p.get("country"),
+                "position": p.get("position"),
+                "breakdown": breakdown,
+                "points": score,
+            }
             best_score = score
-            best_name = p.get("name")
             if best_score == 3:
                 break
+    return best
 
-    if best_name:
-        return best_name
+
+def best_guess_for_constraints(constraints: dict, rng: random.Random | None = None) -> str:
+    """Return a plausible player name guess for the given constraints (for bots)."""
+    best = best_answer_for_constraints(constraints, rng=rng)
+    if best and best.get("name"):
+        return best["name"]
+    players = get_players()
+    rng = rng or random
     return rng.choice(players).get("name", "Unknown Player") if players else "Unknown Player"
 
 

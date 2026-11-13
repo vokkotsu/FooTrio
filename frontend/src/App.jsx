@@ -987,6 +987,26 @@ export default function App() {
                 </div>
               </div>
 
+              {result.bestAnswer && (
+                <div className="mb-4 p-4 rounded-xl bg-sky-50 border border-sky-200 text-sky-900 dark:bg-sky-900/30 dark:border-sky-700 dark:text-sky-100">
+                  <p className="text-sm font-semibold">Best possible answer</p>
+                  <p className="mt-1 font-bold text-[#143524] dark:text-slate-100">
+                    {result.bestAnswer.name || "Unknown"}
+                    <span className="ml-2 text-sm font-medium text-sky-800 dark:text-sky-200">
+                      ({result.bestAnswer.points ?? 0}/3 match)
+                    </span>
+                  </p>
+                  <p className="mt-1 text-xs text-sky-800/90 dark:text-sky-200/90">
+                    {displayValue(result.bestAnswer.country) || "?"} · {displayValue(result.bestAnswer.position) || "?"}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                    <BreakdownPill label="Country" ok={result.bestAnswer.breakdown?.country} />
+                    <BreakdownPill label="Position" ok={result.bestAnswer.breakdown?.position} />
+                    <BreakdownPill label="Club" ok={result.bestAnswer.breakdown?.club} />
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-3">
                 {(result.results || []).map((r) => (
                   <div key={r.playerId} className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
@@ -1113,6 +1133,14 @@ export default function App() {
                         {displayValue(h.constraints?.country)} · {displayValue(h.constraints?.position)} · {displayValue(h.constraints?.club)}
                       </span>
                     </div>
+                    {h.bestAnswer && (
+                      <div className="mb-2 rounded-md border border-sky-200 bg-sky-50 px-2 py-1.5 dark:border-sky-800 dark:bg-sky-900/30">
+                        <div className="text-xs text-sky-800 dark:text-sky-200">
+                          Best: <span className="font-semibold">{h.bestAnswer.name || "Unknown"}</span>
+                          <span className="ml-1">({h.bestAnswer.points ?? 0}/3)</span>
+                        </div>
+                      </div>
+                    )}
                     <ul className="space-y-1.5">
                       {(h.results || []).map((r) => (
                         <li key={r.playerId} className="text-xs">

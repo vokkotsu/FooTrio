@@ -7,6 +7,7 @@ from data_loader import (
     sample_options,
     find_player_matches,
     best_guess_for_constraints,
+    best_answer_for_constraints,
     get_options,
     club_matches,
     club_id,
@@ -412,12 +413,14 @@ class Room:
         for attr, value in self.system_selections.items():
             assignments_out[f"system:{attr}"] = {"attribute": attr, "value": value, "system": True}
 
+        best_answer = best_answer_for_constraints(constraints)
         self.round_result = {
             "round": self.round_number,
             "constraints": constraints,
             "assignments": assignments_out,
             "results": [per_player[pid] for pid in self._ordered_pids() if pid in per_player],
             "standings": self.player_list(),
+            "bestAnswer": best_answer,
             "winnerId": winner_id,
             "draw": draw,
             "gameOver": winner_id is not None or draw,

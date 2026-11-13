@@ -158,26 +158,41 @@ export function findPlayerMatches(guess) {
 
 const allPlayers = gameData.players || [];
 
-export function bestGuessForConstraints(constraints) {
-  const country = constraints.country;
-  const position = constraints.position;
-  const club = constraints.club;
+export function bestAnswerForConstraints(constraints) {
+  const country = constraints?.country;
+  const position = constraints?.position;
+  const club = constraints?.club;
+  if (!allPlayers.length) return null;
 
-  let bestName = null;
+  let best = null;
   let bestScore = -1;
   const samplePool = allPlayers.length <= 5000 ? allPlayers : sample(allPlayers, 5000);
   for (const p of samplePool) {
-    let score = 0;
-    if (country && p.country === country) score += 1;
-    if (position && p.position === position) score += 1;
-    if (club && clubMatches(club, p.clubs || [])) score += 1;
+    const breakdown = {
+      country: !!(country && p.country === country),
+      position: !!(position && p.position === position),
+      club: !!(club && clubMatches(club, p.clubs || [])),
+    };
+    const score = (breakdown.country ? 1 : 0) + (breakdown.position ? 1 : 0) + (breakdown.club ? 1 : 0);
     if (score > bestScore) {
+      best = {
+        name: p.name,
+        player_id: p.player_id,
+        country: p.country,
+        position: p.position,
+        breakdown,
+        points: score,
+      };
       bestScore = score;
-      bestName = p.name;
       if (bestScore === 3) break;
     }
   }
-  if (bestName) return bestName;
+  return best;
+}
+
+export function bestGuessForConstraints(constraints) {
+  const best = bestAnswerForConstraints(constraints);
+  if (best && best.name) return best.name;
   return allPlayers.length ? allPlayers[Math.floor(Math.random() * allPlayers.length)].name || "Unknown Player" : "Unknown Player";
 }
 
@@ -523,12 +538,14 @@ export class FooTrioGame {
       assignmentsOut[`system:${attr}`] = { attribute: attr, value, system: true };
     }
 
+    const bestAnswer = bestAnswerForConstraints(constraints);
     this.roundResult = {
       round: this.roundNumber,
       constraints,
       assignments: assignmentsOut,
       results: this._orderedPids().map((pid) => perPlayer[pid]).filter(Boolean),
       standings: this.playerList(),
+      bestAnswer,
       winnerId,
       draw,
       gameOver,
