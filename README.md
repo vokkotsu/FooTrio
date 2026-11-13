@@ -66,15 +66,13 @@ python preprocess_data.py
 
 Both scripts identify the relevant columns, merge club history per player, extract unique option pools (countries/positions/clubs), and write `game_data.json` with player records, a normalized name index for guess verification, and option pools.
 
-## Running (Vercel + local backend)
-
-The frontend is deployed on Vercel (https://footrio-pavo2.vercel.app). To play, run the backend locally and expose it so Vercel can connect:
+## Running Locally
 
 ### Prerequisites
 - Python 3.10+
-- A tunnel tool in PATH: `cloudflared` (recommended), `ngrok`, or `ssh`
+- Node.js 18+ and npm
 
-### Start
+### Quick start (single command)
 
 From the project root:
 
@@ -82,17 +80,14 @@ From the project root:
 python app.py
 ```
 
-This will start the backend and open a public tunnel, then print the play URL for https://footrio-pavo2.vercel.app (with the backend connection attached). Open that URL in your browser to play. Keep the terminal open while playing; press `Ctrl+C` to stop.
+On the first run this will automatically install missing backend (`pip install -r backend/requirements.txt`) and frontend (`npm install`) dependencies, then start both servers:
 
-Options:
-```bash
-python app.py --tunnel auto|cloudflared|ngrok|ssh
-python app.py --port 8000
-```
+- Backend: http://localhost:8000 (WebSocket: `ws://localhost:8000/ws`)
+- Frontend: http://localhost:5173
 
-### Local development (optional)
+Open the frontend URL, then choose **“Single Player (vs 2 Bots)”** for a quick test or create/join a multiplayer room. Press `Ctrl+C` to stop both.
 
-To run backend and frontend locally without Vercel:
+### Run separately (optional)
 
 **Backend**
 ```bash

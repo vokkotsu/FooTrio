@@ -1,29 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-function resolveWsUrl() {
-  if (typeof window === "undefined") {
-    return import.meta.env.VITE_WS_URL || "";
-  }
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const fromQuery = params.get("ws") || params.get("wsUrl") || params.get("backend");
-    if (fromQuery) {
-      return fromQuery;
-    }
-    // Clear legacy cached tunnel URL so stale/expired tunnels are never reused.
-    localStorage.removeItem("ft-ws-url");
-  } catch {
-    // ignore
-  }
-  return (
-    import.meta.env.VITE_WS_URL ||
-    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-      ? "ws://localhost:8000/ws"
-      : "")
-  );
-}
-
-const WS_URL = resolveWsUrl();
+const WS_URL =
+  import.meta.env.VITE_WS_URL ||
+  (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+    ? "ws://localhost:8000/ws"
+    : "");
 
 const SESSION_KEY = "ft-session";
 
@@ -300,9 +281,7 @@ export default function App() {
           // do not auto-reconnect aggressively; user can rejoin via session
         };
         ws.onerror = () => {
-          setError(
-            "Could not connect to the game server. Make sure 'python app.py' is running, then open https://footrio-pavo2.vercel.app/ using the play URL printed by app.py (or run app.py again). The tunnel URL changes each time app.py starts."
-          );
+          setError("Could not connect to the game server. Check that the backend is running and VITE_WS_URL is correct.");
         };
         ws.onmessage = (ev) => {
           try {
@@ -496,8 +475,7 @@ export default function App() {
             {error && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{error}</p>}
             {!WS_URL && (
               <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 dark:text-amber-200 dark:bg-amber-900/30 dark:border-amber-700">
-                Backend URL is not configured. Run <code>python app.py</code> locally, then open the Vercel game from the
-                tab it opens automatically (or set <code>VITE_WS_URL</code> and redeploy).
+                Backend WebSocket URL is not configured. Set <code>VITE_WS_URL</code> for deployed builds.
               </p>
             )}
           </div>
@@ -610,7 +588,7 @@ export default function App() {
                     <div className="space-y-3">
                       <p className="text-slate-600 dark:text-slate-300">No draft options available yet.</p>
                       <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Restart <code>python run.py</code> so the backend picks up the latest fixes, then hard-refresh and click Retry.
+                        Check that the backend is running, then hard-refresh and click Retry.
                       </p>
                       <button
                         className="btn btn-ghost text-sm"
@@ -639,7 +617,7 @@ export default function App() {
                 <div className="space-y-3">
                   <p className="text-slate-600 dark:text-slate-300">Preparing your draft options...</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    If this stays stuck, restart <code>python run.py</code> (backend may be on old code) and click Retry.
+                    If this stays stuck, check that the backend is running, then click Retry.
                   </p>
                   <button
                     className="btn btn-ghost text-sm"
