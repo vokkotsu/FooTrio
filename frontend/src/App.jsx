@@ -301,7 +301,7 @@ export default function App() {
         };
         ws.onerror = () => {
           setError(
-            `Could not connect to the game server. Pastikan 'python app.py' sedang berjalan, lalu buka https://footrio-pavo2.vercel.app/ dari tab yang dibuka otomatis oleh app.py (atau jalankan app.py lagi). URL tunnel berubah tiap kali app.py dijalankan.`
+            "Could not connect to the game server. Make sure 'python app.py' is running, then open https://footrio-pavo2.vercel.app/ from the tab opened automatically by app.py (or run app.py again). The tunnel URL changes each time app.py starts."
           );
         };
         ws.onmessage = (ev) => {
@@ -496,8 +496,8 @@ export default function App() {
             {error && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{error}</p>}
             {!WS_URL && (
               <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 dark:text-amber-200 dark:bg-amber-900/30 dark:border-amber-700">
-                Backend URL belum di-set. Jalankan <code>python app.py</code> di lokal, lalu buka link Vercel dengan
-                parameter <code>?ws=wss://&lt;tunnel-anda&gt;/ws</code> (atau set <code>VITE_WS_URL</code> lalu redeploy).
+                Backend URL is not configured. Run <code>python app.py</code> locally, then open the Vercel game from the
+                tab it opens automatically (or set <code>VITE_WS_URL</code> and redeploy).
               </p>
             )}
           </div>

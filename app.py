@@ -159,7 +159,7 @@ def start_tunnel(port, tunnel):
             bufsize=1,
         )
     except Exception as e:
-        print(f"Gagal menjalankan tunnel ({tunnel}): {e}")
+        print(f"Failed to start tunnel ({tunnel}): {e}")
         return None, "none"
     procs.append(p)
     return p, tunnel
@@ -221,11 +221,11 @@ def print_ready(http_url, ws_url, vercel_url):
 
     print()
     print("=" * 60)
-    print("Backend aktif. Membuka game Vercel...")
+    print("Backend is running. Opening the Vercel game...")
     print(f"  {vercel_url}/")
     print()
-    print("Jika browser tidak terbuka otomatis, buka URL Vercel di atas.")
-    print("Biarkan terminal ini tetap terbuka saat bermain. Tekan Ctrl+C untuk berhenti.")
+    print("If the browser does not open automatically, open the Vercel URL above.")
+    print("Keep this terminal open while playing. Press Ctrl+C to stop.")
     print("=" * 60)
     print()
 
@@ -237,19 +237,19 @@ def print_ready(http_url, ws_url, vercel_url):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Jalankan backend FooTrio lokal + tunnel agar game Vercel bisa terhubung."
+        description="Start the FooTrio backend locally and expose it so the Vercel game can connect."
     )
-    parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8000)), help="Port backend lokal (default: 8000)")
+    parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8000)), help="Local backend port (default: 8000)")
     parser.add_argument(
         "--tunnel",
         choices=["auto", "cloudflared", "ngrok", "ssh", "none"],
         default="auto",
-        help="Jenis tunnel publik (default: auto, coba cloudflared/ngrok/ssh yang tersedia)",
+        help="Public tunnel type (default: auto; try available cloudflared/ngrok/ssh)",
     )
     parser.add_argument(
         "--vercel-url",
         default=os.environ.get("VERCEL_URL", "https://footrio-pavo2.vercel.app"),
-        help="URL app Vercel (default: https://footrio-pavo2.vercel.app) untuk mencetak link siap main",
+        help="Vercel app URL to open (default: https://footrio-pavo2.vercel.app)",
     )
     args = parser.parse_args()
 
@@ -257,20 +257,20 @@ def main():
         ensure_backend_deps()
     except subprocess.CalledProcessError as e:
         print(f"Dependency installation failed (exit code {e.returncode}).")
-        print("Install manual: cd backend && pip install -r requirements.txt")
+        print("Install manually: cd backend && pip install -r requirements.txt")
         sys.exit(e.returncode or 1)
     except FileNotFoundError as e:
         print(f"Required tool not found: {e.filename or e}")
         sys.exit(1)
 
     backend_proc = start_backend(args.port)
-    print(f"Menyalakan backend (port {args.port}) untuk game Vercel...")
+    print(f"Starting backend (port {args.port}) for the Vercel game...")
 
     if not wait_for_backend(args.port):
-        print("Backend gagal start dalam 20 detik. Cek error di atas.")
+        print("Backend failed to start within 20 seconds. Check the output above for errors.")
         cleanup()
         sys.exit(1)
-    print("Backend siap. Membuka tunnel publik agar bisa diakses Vercel...")
+    print("Backend is ready. Opening a public tunnel so Vercel can connect...")
 
     tunnel_proc, tunnel_kind = start_tunnel(args.port, args.tunnel)
 
@@ -304,13 +304,11 @@ def main():
 
     if tunnel_kind == "none" or not tunnel_proc:
         print()
-        print("Gagal: tidak ada tunnel publik. Game di Vercel tidak bisa terhubung tanpa URL publik.")
-        print("Install salah satu tunnel lalu jalankan lagi (cukup: python app.py):")
-        print("  - cloudflared (disarankan, tanpa akun): https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/")
-        print("  - ngrok                              : https://ngrok.com/download")
-        print("  - atau pastikan 'ssh' tersedia (fallback ke localhost.run)")
-        print()
-        print("Contoh: python app.py --vercel-url https://<app-vercel-kamu>.vercel.app")
+        print("Error: no public tunnel available. The Vercel game cannot connect without a public URL.")
+        print("Install a tunnel tool and run again (just: python app.py):")
+        print("  - cloudflared (recommended, no account): https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/")
+        print("  - ngrok                               : https://ngrok.com/download")
+        print("  - or ensure 'ssh' is available (fallback to localhost.run)")
         cleanup()
         sys.exit(1)
 
@@ -329,15 +327,15 @@ def main():
                 return
             if tunnel_proc and tunnel_proc.poll() is not None:
                 if not announced["done"]:
-                    print(f"\nTunnel exited (code {tunnel_proc.returncode}) sebelum URL publik didapat.")
-                    print("Tidak bisa menghubungkan ke Vercel tanpa URL publik. Coba jalankan ulang dengan --tunnel ngrok/cloudflared.")
+                    print(f"\nTunnel exited (code {tunnel_proc.returncode}) before a public URL was obtained.")
+                    print("Cannot connect the Vercel game without a public URL. Try running again with --tunnel cloudflared or --tunnel ngrok.")
                     cleanup()
                     return
-                print(f"\nTunnel terputus (code {tunnel_proc.returncode}). Mencoba membuka tunnel baru...")
+                print(f"\nTunnel disconnected (code {tunnel_proc.returncode}). Attempting to open a new tunnel...")
                 announced["done"] = False
                 tunnel_proc, tunnel_kind = start_tunnel(args.port, args.tunnel)
                 if not tunnel_proc or tunnel_kind == "none":
-                    print("Gagal membuka ulang tunnel. Hentikan dan jalankan 'python app.py' lagi.")
+                    print("Failed to reopen the tunnel. Stop and run 'python app.py' again.")
                     cleanup()
                     return
                 if tunnel_proc.stdout:
