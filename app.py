@@ -1,108 +1,21 @@
+import argparse
+import atexit
 import importlib.util
+import json
 import os
+import re
+import shutil
 import signal
 import subprocess
 import sys
+import threading
+import time
+import urllib.request
+from urllib.parse import quote, urlparse
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 BACKEND = os.path.join(ROOT, "backend")
-
-procs = []
-
-
-def cleanup():
-    for p in procs:
-        try:
-            if p.poll() is None:
-                p.terminate()
-        except Exception:
-            pass
-    for p in procs:
-        try:
-            p.wait(timeout=5)
-        except Exception:
-            try:
-                p.kill()
-            except Exception:
-                pass
-
-
-def ensure_backend_deps():
-    required = ("fastapi", "uvicorn")
-    missing = [m for m in required if importlib.util.find_spec(m) is None]
-    if not missing:
-        return
-    req_file = os.path.join(BACKEND, "requirements.txt")
-    print(f"Installing backend dependencies ({', '.join(missing)} missing)...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", req_file])
-
-
-def main():
-    try:
-        ensure_backend_deps()
-    except subprocess.CalledProcessError as e:
-        print(f"\nDependency installation failed (exit code {e.returncode}).")
-        print("Please install manually:")
-        print("  cd backend && pip install -r requirements.txt")
-        sys.exit(e.returncode or 1)
-    except FileNotFoundError as e:
-        print(f"\nRequired tool not found: {e.filename or e}")
-        print("Make sure Python/pip and Node.js/npm are installed and on your PATH.")
-        sys.exit(1)
-
-    # Backend (FastAPI + WebSockets)
-    procs.append(
-        subprocess.Popen(
-            [sys.executable, "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"],
-            cwd=BACKEND,
-        )
-    )
-
-    # Frontend (Vite dev server)
-    npm = "npm.cmd" if os.name == "nt" else "npm"
-    procs.append(
-        subprocess.Popen(
-            [npm, "run", "dev"],
-            cwd=os.path.join(ROOT, "frontend"),
-        )
-    )
-
-    print()
-    print("Backend:  http://localhost:8000  (ws://localhost:8000/ws)")
-    print("Frontend: http://localhost:5173")
-    print("Press Ctrl+C to stop both.")
-
-    def handle_sigint(sig, frame):
-        raise KeyboardInterrupt
-
-    try:
-        signal.signal(signal.SIGINT, handle_sigint)
-    except Exception:
-        pass
-
-    try:
-        # wait for either process to exit
-        while True:
-            for p in procs:
-                code = p.poll()
-                if code is not None:
-                    print(f"\nA process exited (code {code}). Stopping...")
-                    return
-            try:
-                procs[0].wait(timeout=0.5)
-            except subprocess.TimeoutExpired:
-                pass
-    except KeyboardInterrupt:
-        print("\nStopping...")
-    finally:
-        cleanup()
-
-
-if __name__ == "__main__":
-    main()
-
-ROOT = os.path.dirname(os.path.abspath(__file__))
-BACKEND = os.path.join(ROOT, "backend")
+FRONTEND = os.path.join(ROOT, "frontend")
 
 procs = []
 _cleanup_done = False
@@ -142,6 +55,14 @@ def ensure_backend_deps():
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", req_file])
 
 
+def ensure_frontend_deps():
+    if os.path.isdir(os.path.join(FRONTEND, "node_modules")):
+        return
+    npm = "npm.cmd" if os.name == "nt" else "npm"
+    print("Installing frontend dependencies (node_modules missing)...")
+    subprocess.check_call([npm, "install"], cwd=FRONTEND)
+
+
 def start_backend(port):
     env = os.environ.copy()
     env["PORT"] = str(port)
@@ -158,6 +79,13 @@ def start_backend(port):
         "--forwarded-allow-ips=*",
     ]
     p = subprocess.Popen(cmd, cwd=BACKEND, env=env)
+    procs.append(p)
+    return p
+
+
+def start_frontend():
+    npm = "npm.cmd" if os.name == "nt" else "npm"
+    p = subprocess.Popen([npm, "run", "dev"], cwd=FRONTEND)
     procs.append(p)
     return p
 
@@ -263,7 +191,6 @@ def start_tunnel(port, tunnel):
 
 
 def extract_public_url(line):
-    # cloudflared / ngrok / localhost.run (lhr.life) / serveo style URLs
     m = re.search(
         r"https://[a-zA-Z0-9.-]+\.(?:trycloudflare\.com|ngrok-free\.app|ngrok\.app|ngrok\.io|lhr\.life|localhost\.run)",
         line,
@@ -331,24 +258,49 @@ def print_ready(http_url, ws_url, vercel_url):
     print()
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Start the FooTrio backend locally and expose it so the Vercel game can connect."
-    )
-    parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8000)), help="Local backend port (default: 8000)")
-    parser.add_argument(
-        "--tunnel",
-        choices=["auto", "cloudflared", "ngrok", "ssh", "none"],
-        default="auto",
-        help="Public tunnel type (default: auto; try available cloudflared/ngrok/ssh)",
-    )
-    parser.add_argument(
-        "--vercel-url",
-        default=os.environ.get("VERCEL_URL", "https://footrio-pavo2.vercel.app"),
-        help="Vercel app URL to open (default: https://footrio-pavo2.vercel.app)",
-    )
-    args = parser.parse_args()
+def run_local():
+    try:
+        ensure_backend_deps()
+        ensure_frontend_deps()
+    except subprocess.CalledProcessError as e:
+        print(f"\nDependency installation failed (exit code {e.returncode}).")
+        sys.exit(e.returncode or 1)
+    except FileNotFoundError as e:
+        print(f"\nRequired tool not found: {e.filename or e}")
+        print("Make sure Python/pip and Node.js/npm are installed and on your PATH.")
+        sys.exit(1)
 
+    backend_proc = start_backend(8000)
+    frontend_proc = start_frontend()
+
+    print()
+    print("Backend:  http://localhost:8000  (ws://localhost:8000/ws)")
+    print("Frontend: http://localhost:5173")
+    print("Press Ctrl+C to stop both.")
+
+    def handle_sigint(sig, frame):
+        raise KeyboardInterrupt
+
+    try:
+        signal.signal(signal.SIGINT, handle_sigint)
+    except Exception:
+        pass
+
+    try:
+        while True:
+            for p in (backend_proc, frontend_proc):
+                code = p.poll()
+                if code is not None:
+                    print(f"\nA process exited (code {code}). Stopping...")
+                    return
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        print("\nStopping...")
+    finally:
+        cleanup()
+
+
+def run_tunnel(args):
     try:
         ensure_backend_deps()
     except subprocess.CalledProcessError as e:
@@ -369,7 +321,6 @@ def main():
     print("Backend is ready. Opening a public tunnel so Vercel can connect...")
 
     tunnel_proc, tunnel_kind = start_tunnel(args.port, args.tunnel)
-
     announced = {"done": False}
 
     def announce(http_url):
@@ -381,6 +332,7 @@ def main():
         print_ready(http_url, ws_url, vercel_url)
 
     if tunnel_proc and tunnel_proc.stdout:
+
         def on_line(line):
             url = extract_public_url(line)
             if url:
@@ -401,10 +353,7 @@ def main():
     if tunnel_kind == "none" or not tunnel_proc:
         print()
         print("Error: no public tunnel available. The Vercel game cannot connect without a public URL.")
-        print("Install a tunnel tool and run again (just: python app.py):")
-        print("  - cloudflared (recommended, no account): https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/")
-        print("  - ngrok                               : https://ngrok.com/download")
-        print("  - or ensure 'ssh' is available (fallback to localhost.run)")
+        print("Install a tunnel tool and run again with --tunnel auto/cloudflared/ngrok/ssh.")
         cleanup()
         sys.exit(1)
 
@@ -424,17 +373,17 @@ def main():
             if tunnel_proc and tunnel_proc.poll() is not None:
                 if not announced["done"]:
                     print(f"\nTunnel exited (code {tunnel_proc.returncode}) before a public URL was obtained.")
-                    print("Cannot connect the Vercel game without a public URL. Try running again with --tunnel cloudflared or --tunnel ngrok.")
                     cleanup()
                     return
                 print(f"\nTunnel disconnected (code {tunnel_proc.returncode}). Attempting to open a new tunnel...")
                 announced["done"] = False
                 tunnel_proc, tunnel_kind = start_tunnel(args.port, args.tunnel)
                 if not tunnel_proc or tunnel_kind == "none":
-                    print("Failed to reopen the tunnel. Stop and run 'python app.py' again.")
+                    print("Failed to reopen the tunnel. Stop and run again.")
                     cleanup()
                     return
                 if tunnel_proc.stdout:
+
                     def on_line(line):
                         url = extract_public_url(line)
                         if url:
@@ -455,6 +404,28 @@ def main():
         print("\nStopping...")
     finally:
         cleanup()
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Start FooTrio locally or expose backend via a public tunnel for Vercel.")
+    parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8000)), help="Backend port (default: 8000)")
+    parser.add_argument(
+        "--tunnel",
+        choices=["auto", "cloudflared", "ngrok", "ssh", "none"],
+        default="none",
+        help="Public tunnel type. Default 'none' runs local backend+frontend dev servers.",
+    )
+    parser.add_argument(
+        "--vercel-url",
+        default=os.environ.get("VERCEL_URL", "https://footrio-pavo2.vercel.app"),
+        help="Vercel app URL to open in tunnel mode.",
+    )
+    args = parser.parse_args()
+
+    if args.tunnel == "none":
+        run_local()
+    else:
+        run_tunnel(args)
 
 
 if __name__ == "__main__":

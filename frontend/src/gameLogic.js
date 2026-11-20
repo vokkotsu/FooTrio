@@ -30,6 +30,8 @@ function sample(arr, k) {
 
 export function normalizeName(name) {
   return String(name || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
@@ -166,8 +168,7 @@ export function bestAnswerForConstraints(constraints) {
 
   let best = null;
   let bestScore = -1;
-  const samplePool = allPlayers.length <= 5000 ? allPlayers : sample(allPlayers, 5000);
-  for (const p of samplePool) {
+  for (const p of allPlayers) {
     const breakdown = {
       country: !!(country && p.country === country),
       position: !!(position && p.position === position),

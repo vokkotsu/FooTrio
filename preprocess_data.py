@@ -1,5 +1,8 @@
 import json
 import os
+import re
+import unicodedata
+from collections import defaultdict
 
 import pandas as pd
 
@@ -8,6 +11,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PLAYERS_CSV = os.path.join(BASE_DIR, "players.csv")
 TRANSFERS_CSV = os.path.join(BASE_DIR, "transfers.csv")
 OUTPUT_JSON = os.path.join(BASE_DIR, "game_data.json")
+FRONTEND_OUTPUT_JSON = os.path.join(BASE_DIR, "frontend", "src", "game_data.json")
 
 
 # Relevant columns identified from the provided datasets
@@ -41,62 +45,57 @@ TOP_FIFA_COUNTRIES = [
     "Croatia",
 ]
 
-TOP5_LEAGUE_CLUBS = [
-    # Premier League
-    "Manchester City",
-    "Arsenal FC",
-    "Liverpool FC",
-    "Aston Villa",
-    "Tottenham Hotspur",
-    "Chelsea FC",
-    "Newcastle United",
-    "Manchester United",
-    "West Ham United",
-    "Brighton & Hove Albion",
-    # La Liga
-    "Real Madrid",
-    "FC Barcelona",
-    "Girona FC",
-    "Atlético de Madrid",
-    "Athletic Bilbao",
-    "Real Sociedad",
-    "Real Betis Balompié",
-    "Villarreal CF",
-    "Valencia CF",
-    "Sevilla FC",
-    # Bundesliga
-    "Bayer 04 Leverkusen",
-    "Bayern Munich",
-    "VfB Stuttgart",
-    "RB Leipzig",
-    "Borussia Dortmund",
-    "Eintracht Frankfurt",
-    "TSG 1899 Hoffenheim",
-    "1.FC Union Berlin",
-    "SC Freiburg",
-    "VfL Wolfsburg",
-    # Serie A
-    "Inter Milan",
-    "AC Milan",
-    "Juventus FC",
-    "Atalanta BC",
-    "Bologna FC 1909",
-    "AS Roma",
-    "SS Lazio",
-    "ACF Fiorentina",
-    "SSC Napoli",
-    "Torino FC",
-    # Ligue 1
-    "Paris Saint-Germain",
-    "AS Monaco",
-    "Stade Brestois 29",
-    "LOSC Lille",
-    "OGC Nice",
-    "Olympique Lyon",
-    "RC Lens",
-    "Olympique Marseille",
-    "Stade Rennais FC",
-    "Stade Reims",
+TOP5_LEAGUE_CLUB_PREFERENCES = [
+    ("Manchester City", ["Manchester City"]),
+    ("Arsenal FC", ["Arsenal FC", "Arsenal Football Club"]),
+    ("Liverpool FC", ["Liverpool FC", "Liverpool Football Club"]),
+    ("Aston Villa", ["Aston Villa"]),
+    ("Tottenham Hotspur", ["Tottenham Hotspur"]),
+    ("Chelsea FC", ["Chelsea FC", "Chelsea Football Club"]),
+    ("Newcastle United", ["Newcastle United"]),
+    ("Manchester United", ["Manchester United"]),
+    ("West Ham United", ["West Ham United"]),
+    ("Brighton & Hove Albion", ["Brighton & Hove Albion"]),
+    ("Real Madrid", ["Real Madrid", "Real Madrid CF", "Real Madrid Club de Fútbol"]),
+    ("FC Barcelona", ["FC Barcelona", "Futbol Club Barcelona"]),
+    ("Girona FC", ["Girona FC"]),
+    ("Atlético de Madrid", ["Atlético de Madrid", "Club Atlético de Madrid"]),
+    ("Athletic Bilbao", ["Athletic Bilbao", "Athletic Club"]),
+    ("Real Sociedad", ["Real Sociedad"]),
+    ("Real Betis Balompié", ["Real Betis Balompié", "Real Betis"]),
+    ("Villarreal CF", ["Villarreal CF"]),
+    ("Valencia CF", ["Valencia CF"]),
+    ("Sevilla FC", ["Sevilla FC"]),
+    ("Bayer 04 Leverkusen", ["Bayer 04 Leverkusen"]),
+    ("Bayern Munich", ["Bayern Munich", "FC Bayern München"]),
+    ("VfB Stuttgart", ["VfB Stuttgart"]),
+    ("RB Leipzig", ["RB Leipzig", "RasenBallsport Leipzig"]),
+    ("Borussia Dortmund", ["Borussia Dortmund"]),
+    ("Eintracht Frankfurt", ["Eintracht Frankfurt"]),
+    ("TSG 1899 Hoffenheim", ["TSG 1899 Hoffenheim"]),
+    ("1.FC Union Berlin", ["1.FC Union Berlin", "1. FC Union Berlin"]),
+    ("SC Freiburg", ["SC Freiburg"]),
+    ("VfL Wolfsburg", ["VfL Wolfsburg"]),
+    ("Inter Milan", ["Inter Milan", "FC Internazionale Milano", "Internazionale"]),
+    ("AC Milan", ["AC Milan", "Associazione Calcio Milan"]),
+    ("Juventus FC", ["Juventus FC", "Juventus Football Club"]),
+    ("Atalanta BC", ["Atalanta BC", "Atalanta Bergamasca Calcio"]),
+    ("Bologna FC 1909", ["Bologna FC 1909", "Bologna Football Club 1909"]),
+    ("AS Roma", ["AS Roma", "Associazione Sportiva Roma"]),
+    ("SS Lazio", ["SS Lazio", "Società Sportiva Lazio S.p.A.", "Società Sportiva Lazio"]),
+    ("ACF Fiorentina", ["ACF Fiorentina"]),
+    ("SSC Napoli", ["SSC Napoli", "Società Sportiva Calcio Napoli"]),
+    ("Torino FC", ["Torino FC"]),
+    ("Paris Saint-Germain", ["Paris Saint-Germain", "Paris Saint-Germain Football Club"]),
+    ("AS Monaco", ["AS Monaco", "Association Sportive de Monaco Football Club"]),
+    ("Stade Brestois 29", ["Stade Brestois 29"]),
+    ("LOSC Lille", ["LOSC Lille"]),
+    ("OGC Nice", ["OGC Nice"]),
+    ("Olympique Lyon", ["Olympique Lyon", "Olympique Lyonnais"]),
+    ("RC Lens", ["RC Lens", "Racing Club de Lens"]),
+    ("Olympique Marseille", ["Olympique Marseille"]),
+    ("Stade Rennais FC", ["Stade Rennais FC", "Stade Rennais"]),
+    ("Stade Reims", ["Stade Reims", "Stade de Reims"]),
 ]
 
 
@@ -156,12 +155,24 @@ def is_valid_club(name, cid="") -> bool:
     return True
 
 
+def normalize_name(name: str) -> str:
+    s = unicodedata.normalize("NFKD", name or "")
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    s = s.lower()
+    s = re.sub(r"[^a-z0-9\s]", " ", s)
+    return " ".join(s.split())
+
+
 def register_club(club_name_by_id, cid, name):
     cid = clean_id(cid)
     name = clean_value(name)
     if not is_valid_club(name, cid):
         return
     if cid not in club_name_by_id:
+        club_name_by_id[cid] = name
+        return
+    existing = club_name_by_id[cid]
+    if len(name) < len(existing) and len(name) >= 4:
         club_name_by_id[cid] = name
 
 
@@ -245,7 +256,9 @@ def main() -> None:
     name_index = {}
     by_id = {p["player_id"]: p for p in players}
     for p in players:
-        norm = " ".join(str(p["name"]).lower().split())
+        norm = normalize_name(str(p["name"]))
+        if not norm:
+            continue
         name_index.setdefault(norm, []).append(p["player_id"])
     for norm, ids in name_index.items():
         ids.sort(key=lambda pid: (-len(by_id[pid]["clubs"]), by_id[pid]["name"], pid))
@@ -254,14 +267,33 @@ def main() -> None:
         {"id": cid, "name": club_name_by_id[cid]}
         for cid in sorted(clubs_pool_ids, key=lambda c: (club_name_by_id[c].lower(), c))
     ]
-    clubs_by_name = {}
+
+    clubs_by_norm_name = defaultdict(list)
     for cid in clubs_pool_ids:
-        clubs_by_name.setdefault(club_name_by_id[cid], []).append(cid)
+        clubs_by_norm_name[normalize_name(club_name_by_id[cid])].append(cid)
+
+    def _club_candidate_score(cid):
+        name = club_name_by_id[cid]
+        bad_markers = (" u17", " u18", " u19", " u20", " u21", " youth", " b team", " ii", " reserve", " juvenil", " primavera")
+        lname = f" {name.lower()} "
+        penalty = sum(5 for m in bad_markers if m in lname)
+        return (penalty, len(name), name.lower(), cid)
+
     top5_league_clubs = []
-    for name in TOP5_LEAGUE_CLUBS:
-        ids_for_name = sorted(clubs_by_name.get(name, []))
-        if ids_for_name:
-            top5_league_clubs.append({"id": ids_for_name[0], "name": name})
+    seen_top_ids = set()
+    for display_name, aliases in TOP5_LEAGUE_CLUB_PREFERENCES:
+        candidate_ids = []
+        for alias in aliases:
+            candidate_ids.extend(clubs_by_norm_name.get(normalize_name(alias), []))
+        candidate_ids = sorted(set(candidate_ids), key=_club_candidate_score)
+        if not candidate_ids:
+            continue
+        cid = candidate_ids[0]
+        if cid in seen_top_ids:
+            continue
+        seen_top_ids.add(cid)
+        top5_league_clubs.append({"id": cid, "name": club_name_by_id[cid]})
+
     top_fifa_countries = [c for c in TOP_FIFA_COUNTRIES if c in countries]
 
     data = {
@@ -297,6 +329,11 @@ def main() -> None:
 
     with open(OUTPUT_JSON, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+
+    if os.path.isdir(os.path.dirname(FRONTEND_OUTPUT_JSON)):
+        with open(FRONTEND_OUTPUT_JSON, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        print(f"Wrote {FRONTEND_OUTPUT_JSON}")
 
     print("Identified columns:", json.dumps(data["identified_columns"], indent=2))
     print("Stats:", json.dumps(data["stats"], indent=2))

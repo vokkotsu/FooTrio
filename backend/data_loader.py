@@ -1,6 +1,8 @@
 import json
 import os
 import random
+import re
+import unicodedata
 from functools import lru_cache
 
 DATA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "game_data.json")
@@ -102,7 +104,11 @@ def sample_options(attribute, k=5):
 
 
 def normalize_name(name: str) -> str:
-    return " ".join((name or "").lower().split())
+    s = unicodedata.normalize("NFKD", name or "")
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    s = s.lower()
+    s = re.sub(r"[^a-z0-9\s]", " ", s)
+    return " ".join(s.split())
 
 
 def club_id(value):
@@ -153,7 +159,6 @@ def find_player_matches(guess: str):
 
 def best_answer_for_constraints(constraints: dict, rng: random.Random | None = None):
     """Return the best-matching player for the given constraints."""
-    rng = rng or random
     players = get_players()
     if not players:
         return None
@@ -163,8 +168,7 @@ def best_answer_for_constraints(constraints: dict, rng: random.Random | None = N
 
     best = None
     best_score = -1
-    sample = players if len(players) <= 5000 else rng.sample(players, 5000)
-    for p in sample:
+    for p in players:
         breakdown = {
             "country": bool(country and p.get("country") == country),
             "position": bool(position and p.get("position") == position),
