@@ -1,59 +1,36 @@
-# Football Trivia Draft (FooTrio)
+# FooTrio (Football Trivia Draft) — PHP version
 
-A real-time multiplayer football trivia game for **exactly 3 players**. Each round, players draft constraints (Country, Position, Club), reveal them, then race to guess a real-life footballer who matches all three. Built with **FastAPI + WebSockets** (backend) and **React + Vite + Tailwind** (frontend).
+A real-time multiplayer football trivia game for **exactly 3 players** (with single-player and duo-vs-bot modes). Each round, players draft constraints (Country, Position, Club), reveal them, then race to guess a real-life footballer who matches all three.
 
-Supports **multiplayer rooms** and a **single-player test mode** (you vs 2 bots) so you can try the full flow locally.
+This `php` branch is a functionally equivalent port of the original Python FastAPI backend to **PHP** (Ratchet/ReactPHP WebSockets) so it can be deployed as a PHP project, while keeping the same React frontend and gameplay behavior.
 
 ## Game Flow
 
-1. **Lobby** – Players create/join a room via WebSocket. The game requires exactly 3 players and **Round 1 starts automatically** when the 3rd joins.
-2. **Drafting (constraint selection)** – Each round, the 3 players are randomly assigned one attribute to pick:
-   - Player A → **Country**
-   - Player B → **Position**
-   - Player C → **Club**
-   
-   Assignments **rotate every round**. Players don’t type values: the backend serves **5 randomized valid options** (from the dataset) for their assigned attribute. Players wait in a “Waiting for others…” state until all 3 have selected.
-3. **Reveal & Guessing** – The 3 chosen constraints are revealed to everyone and a **30-second countdown** starts. Each player submits the name of a real-life footballer they think matches the criteria.
-4. **Verification & Scoring** – When the timer ends or all players submit, guesses are verified against the dataset. Scoring is **+1 point per fulfilled aspect** (max 3 per round): country match, position match, and club history match (the player played for the chosen club).
-5. **Winning condition** – After each round the standings are broadcast. First player to reach **15 points** wins; otherwise a new round begins (back to drafting with rotated assignments).
+1. **Lobby** – Players create/join a room via WebSocket. The game requires exactly 3 players (or 2 in duo mode, or 1 vs 2 bots in single-player) and **Round 1 starts automatically** when the room is full.
+2. **Drafting (constraint selection)** – Each round, players are assigned an attribute to pick (**Country**, **Position**, **Club**). Assignments **rotate every round**. The backend serves **5 randomized valid options** for the assigned attribute (with biased pools for countries/clubs). Players can refresh options (limited) and have a draft timer; missing picks are auto-selected when time runs out.
+3. **Reveal & Guessing** – The chosen constraints are revealed to everyone and a **60-second countdown** starts. Each player submits the name of a real-life footballer they think matches the criteria (with name suggestions).
+4. **Verification & Scoring** – When the timer ends or all players submit, guesses are verified against the dataset. Scoring is **+1 point per fulfilled aspect** (max 3 per round): country match, position match, and club history match.
+5. **Winning condition** – After each round standings are broadcast. First player to reach **15 points** wins (draw if multiple reach in the same round); otherwise a new round begins automatically.
 
 ## Project Structure
 
-```
-.
-├── backend/
-│   ├── main.py            # FastAPI app, /ws endpoint, message routing & broadcasting
-│   ├── room_manager.py    # Room state machine (lobby → draft → guess → result/game_over)
-│   ├── data_loader.py     # Loads game_data.json, samples options, matches guesses
-│   ├── config.py          # Game constants (room size, win score, timers, attributes)
-│   └── requirements.txt
-├── frontend/
-│   ├── src/
-│   │   ├── App.jsx        # UI + WebSocket client (lobby, draft, guess, results, scoreboard)
-│   │   ├── main.jsx
-│   │   └── index.css
-│   ├── index.html
-│   ├── package.json
-│   └── vite.config.js
-├── players.csv            # Source player dataset
-├── transfers.csv          # Source transfer/club-history dataset
-├── preprocess_data.py     # Pandas preprocessing script (CSV → game_data.json)
-├── generate_game_data.py  # Stdlib (csv/json) preprocessing script
-└── game_data.json         # Pre-generated dataset used by the backend at runtime
-```
+- `backend_php/` — PHP WebSocket server (Ratchet/ReactPHP) and game logic.
+  - `server.php` — WebSocket server, message handling, and timers (draft/guess timeouts, next-round scheduling).
+  - `room_manager.php` — rooms, sessions, round flow, scoring, and state snapshots.
+  - `data_loader.php` — loads `game_data.json`, samples options, matches guesses, and provides suggestions/best answers.
+  - `config.php` — game constants.
+  - `composer.json` — PHP dependencies.
+- `backend/` — original Python backend (kept for reference).
+- `frontend/` — React (Vite) + Tailwind CSS client. Includes local single-player/duo logic in `src/gameLogic.js` for browser-only play, and multiplayer over WebSockets.
+- `game_data.json` — pre-generated dataset used by the PHP backend at runtime (loaded from project root).
+- `index.php` — PHP front controller to serve the built SPA from `frontend/dist`.
+- `.htaccess` — rewrite rules for SPA routing on Apache/PHP hosts.
+- `run_php.php` — convenience script to start PHP WS backend + PHP static frontend server.
+- `app.py`, `run.py` (if present) — original Python convenience scripts (kept for reference).
 
-## Dataset & Preprocessing
+## Dataset
 
-The game data is built from the included CSVs:
-
-| Concept | Source column(s) |
-|---|---|
-| **Player Name** | `players.csv` → `name` |
-| **Position** | `players.csv` → `position` (Goalkeeper, Defender, Midfield, Attack) |
-| **Country/Nationality** | `players.csv` → `country_of_citizenship` |
-| **Club/Club History** | `players.csv` → `current_club_name` **+** `transfers.csv` → `from_club_name`, `to_club_name` (joined on `player_id`) |
-
-`game_data.json` is pre-generated and loaded by the backend. To regenerate it after changing the CSVs:
+`game_data.json` is built from the included CSVs (`players.csv`, `transfers.csv`). To regenerate it after changing the CSVs, use the original scripts:
 
 ```bash
 # Option A: stdlib only (no extra deps)
@@ -64,107 +41,61 @@ pip install pandas
 python preprocess_data.py
 ```
 
-Both scripts identify the relevant columns, merge club history per player, extract unique option pools (countries/positions/clubs), and write `game_data.json` with player records, a normalized name index for guess verification, and option pools.
+## Run Locally (PHP)
 
-## Running Locally
+**Prerequisites:** PHP 8.1+ with Composer, and Node.js/npm (to build the frontend assets). Recommended PHP extensions: `json`, `mbstring` (and `intl` for best Unicode name normalization).
 
-### Prerequisites
-- Python 3.10+
-- Node.js 18+ and npm
+### 1. Install PHP backend dependencies
 
-### Quick start (single command)
+```bash
+cd backend_php
+composer install
+```
+
+### 2. Build the frontend
+
+```bash
+cd frontend
+npm install --include=dev
+npm run build
+```
+
+For local multiplayer, the frontend defaults to `ws://localhost:8000/ws` when running on localhost. For deployed builds, set `VITE_WS_URL` to your PHP WebSocket endpoint before building (e.g. `wss://<your-ws-host>/ws`):
+
+```bash
+# example
+VITE_WS_URL=wss://your-ws-host/ws npm run build
+```
+
+### 3. Start the PHP servers
 
 From the project root:
 
 ```bash
-python app.py
+php run_php.php
 ```
 
-On the first run this will automatically install missing backend (`pip install -r backend/requirements.txt`) and frontend (`npm install`) dependencies, then start both servers:
+- WebSocket backend: `ws://localhost:8000/ws` (same protocol and message types as the original backend)
+- Frontend (built SPA): http://localhost:5173 (served via PHP built-in server + `index.php`)
 
-- Backend: http://localhost:8000 (WebSocket: `ws://localhost:8000/ws`)
-- Frontend: http://localhost:5173
+Open the frontend URL and start playing. Press `Ctrl+C` to stop.
 
-Open the frontend URL, then choose **“Single Player (vs 2 Bots)”** for a quick test or create/join a multiplayer room. Press `Ctrl+C` to stop both.
+> Single-player and 2-player-vs-bot modes run locally in the browser and do not require the backend.
 
-### Run separately (optional)
+## Deployment (PHP)
 
-**Backend**
-```bash
-cd backend
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
-```
+- **Frontend/static SPA:** deploy the project on a PHP-capable web server with the document root at the project root (or route all non-file requests to `index.php`). `index.php` serves files from `frontend/dist` with SPA fallback. Ensure `frontend/dist` is built with the correct `VITE_WS_URL`.
+- **WebSocket backend:** run the Ratchet server as a long-running PHP process on a host that supports persistent processes (VPS/container/PaaS with worker support):
 
-**Frontend**
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-## Configuration
-
-- **Frontend WebSocket URL:** set `VITE_WS_URL` for non-local/deployed backends (defaults to `ws://localhost:8000/ws` on localhost).
   ```bash
-  # example
-  VITE_WS_URL=wss://your-backend.example.com/ws npm run dev
+  cd backend_php && composer install
+  php server.php
   ```
-- **Game tuning:** edit `backend/config.py` (`ROOM_SIZE`, `WIN_SCORE`, `DRAFT_OPTIONS`, `GUESS_COUNTDOWN`, etc.).
 
-## WebSocket Events (overview)
+  It listens on port `8000` by default, or the `$PORT` environment variable if provided. The WebSocket endpoint is `/ws` (e.g. `wss://your-host/ws`). The backend reads `game_data.json` from the project root (`../game_data.json` relative to `backend_php/`).
 
-| Direction | Event | Purpose |
-|---|---|---|
-| client → server | `create_room`, `join_room`, `rejoin_room` | Session/room management |
-| client → server | `select_option` | Draft pick for assigned attribute |
-| client → server | `submit_guess` | Submit guessed player name |
-| server → client | `joined`, `lobby_update`, `state_sync` | Join/reconnect & lobby state |
+- Multiplayer room state is in-memory (resets on restart/redeploy), same as the original implementation.
 
-## Deploying (Frontend on Vercel + Backend on a WebSocket host)
+## WebSocket Protocol
 
-This game uses **WebSockets** and **in-memory room state**, so the backend must run on a platform that supports long-lived connections (not Vercel serverless functions). The recommended split is:
-
-- **Frontend (Vite/React)** → Vercel
-- **Backend (FastAPI + WebSockets)** → Render, Railway, Fly.io, or any host that supports Docker/WebSockets
-
-### 1) Deploy the backend (Render example)
-
-1. Push this repo to GitHub (if not already).
-2. In [Render](https://render.com), create a **Web Service** from the repo.
-   - **Option A (Blueprint):** Render can detect `render.yaml` in the repo root.
-   - **Option B (Manual):** Runtime **Docker**, Dockerfile path `backend/Dockerfile`, Docker build context `.` (repo root). Set health check path to `/`.
-3. Deploy and copy the service URL, e.g. `https://footrio-backend.onrender.com`.
-4. Verify: open `https://<your-backend>/` and confirm it returns `{"status":"ok","service":"football-trivia"}`. The WebSocket endpoint is `wss://<your-backend>/ws`.
-
-Notes:
-- `backend/Dockerfile` copies `backend/` and `game_data.json` from the repo root, so deploy from the **repository root** context.
-- Free tiers may sleep when idle (first connect can be slow) and in-memory rooms reset on restart/redeploy. For a demo this is usually fine.
-
-### 2) Deploy the frontend (Vercel)
-
-1. In [Vercel](https://vercel.com), **Add New Project** and import the same GitHub repo.
-2. Set **Root Directory** to `frontend`.
-3. Framework preset: **Vite** (auto-detected). Build command: `npm run build`. Output directory: `dist`.
-4. Add environment variable:
-   - `VITE_WS_URL` = `wss://<your-backend-host>/ws` (example: `wss://footrio-backend.onrender.com/ws`)
-5. Deploy. Open the Vercel URL and test creating/joining a room (single-player mode is the quickest check).
-
-`frontend/vercel.json` is included for SPA rewrites. If you change `VITE_WS_URL`, redeploy the frontend so the value is baked into the Vite build.
-
-### Local production-like test
-
-```bash
-# backend
-cd backend
-uvicorn main:app --host 0.0.0.0 --port 8000
-
-# frontend (in another terminal) with explicit WS URL
-cd frontend
-VITE_WS_URL=ws://localhost:8000/ws npm run build
-npm run preview
-```
-
-| server → client | `round_started`, `draft_prompt`, `draft_status` | Draft phase & options |
-| server → client | `guess_phase`, `guess_update` | Reveal constraints & guess timer |
-| server → client | `round_result`, `game_over` | Verification, scoring, standings, winner |
+The WebSocket protocol and game behavior (room modes, drafting/guessing flow, timers, scoring, state sync/rejoin, player suggestions, etc.) match the original implementation so the existing frontend works without changes.
